@@ -30,5 +30,12 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'warn',
       'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
+  },
+  {
+    // Test matchers like expect.any() are typed `any` by design.
+    files: ['**/*.spec.ts', '**/*.smoke.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+    },
   }
 );

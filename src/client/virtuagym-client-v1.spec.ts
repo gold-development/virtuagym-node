@@ -152,9 +152,7 @@ describe('VirtuaGymClientV1', () => {
     });
 
     it('rejects a response that does not match the employee schema', async () => {
-      requestMock.mockResolvedValue(
-        envelope([{ member_id: 'not-a-number' }]),
-      );
+      requestMock.mockResolvedValue(envelope([{ member_id: 'not-a-number' }]));
 
       await expect(client.allEmployees()).rejects.toBeInstanceOf(ZodError);
     });

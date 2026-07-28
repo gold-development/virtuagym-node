@@ -41,6 +41,7 @@
     "dist"
   ],
   "scripts": {
+    "lint": "eslint .",
     "test": "vitest run",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",

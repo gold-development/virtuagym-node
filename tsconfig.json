@@ -1,5 +1,9 @@
 {
   "extends": "./tsconfig.build.json",
-  "include": ["src"],
+  "compilerOptions": {
+    // TS 6 no longer auto-includes node_modules/@types.
+    "types": ["node"]
+  },
+  "include": ["src", "tsup.config.ts", "vitest.smoke.config.ts"],
   "exclude": []
 }
