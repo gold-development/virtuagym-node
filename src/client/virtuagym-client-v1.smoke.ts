@@ -32,6 +32,22 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     }
   });
 
+  it('retrieves club events from the live API', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const events = await client.allEvents({
+      timestampStart: now - 90 * 86400,
+      timestampEnd: now + 90 * 86400,
+    });
+
+    // The club may legitimately have no events; the value of this test is
+    // that the request succeeds and every returned event passes the schema.
+    expect(Array.isArray(events)).toBe(true);
+    for (const event of events) {
+      expect(typeof event.event_id).toBe('string');
+      expect(event.club_id).toBe(Number(process.env['VIRTUAGYM_CLUB_ID']));
+    }
+  });
+
   it('retrieves a single employee from the live API', async () => {
     // Only the first page is needed to pick a member_id.
     const { value: firstPage } = await client.employees().next();

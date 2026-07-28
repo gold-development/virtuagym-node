@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance } from 'axios';
 import { z } from 'zod';
+import { clubEventSchema, type ClubEvent } from '../models/club-event';
 import {
   employeeSchema,
   type Employee,
@@ -161,6 +162,103 @@ export class VirtuaGymClientV1 {
     }
   }
 
+  /** Retrieves every club event matching the query across all pages. */
+  public async allEvents(
+    options: ClubEventsOptions = {},
+  ): Promise<ClubEvent[]> {
+    const events: ClubEvent[] = [];
+    for await (const page of this.events(options)) {
+      events.push(...page);
+    }
+    return events;
+  }
+
+  /**
+   * Yields club events page by page, fetching each page lazily.
+   *
+   * Unlike employees, the events endpoint documents no per-item pagination
+   * cursor; when the API reports results remaining, the next page is
+   * requested with sync_from advanced to the previous response's status
+   * timestamp (Virtuagym's general sync mechanism).
+   */
+  public async *events(
+    options: ClubEventsOptions = {},
+  ): AsyncGenerator<ClubEvent[], void, undefined> {
+    let syncFrom = options.syncFrom ?? 0;
+
+    for (;;) {
+      const params = new URLSearchParams();
+      params.set('sync_from', syncFrom.toString());
+      if (options.timestampStart !== undefined) {
+        params.set('timestamp_start', options.timestampStart.toString());
+      }
+      if (options.timestampEnd !== undefined) {
+        params.set('timestamp_end', options.timestampEnd.toString());
+      }
+      if (options.memberId !== undefined) {
+        params.set('member_id', options.memberId.toString());
+      }
+      if (options.scheduleId !== undefined) {
+        params.set('schedule_id', options.scheduleId.toString());
+      }
+
+      const { result, status } = await this.request(z.array(clubEventSchema), {
+        method: 'get',
+        path: `club/${this.options.clubId}/events`,
+        contentType: 'application/json',
+        params,
+      });
+      if (result.length > 0) {
+        yield result;
+      }
+
+      // Guard against looping forever if the cursor cannot advance.
+      if (
+        (status.results_remaining ?? 0) <= 0 ||
+        result.length === 0 ||
+        status.timestamp <= syncFrom
+      ) {
+        return;
+      }
+      syncFrom = status.timestamp;
+    }
+  }
+
+  /**
+   * Retrieves a single club event by event ID.
+   *
+   * Throws {@link VirtuaGymApiError} (statuscode 420) when the event does
+   * not exist.
+   */
+  public async event(
+    eventId: string,
+    options: ClubEventOptions = {},
+  ): Promise<ClubEvent> {
+    const params = new URLSearchParams();
+    params.set('sync_from', (options.syncFrom ?? 0).toString());
+
+    // The API is inconsistent about single results (object vs one-element
+    // array), so accept both.
+    const { result } = await this.request(
+      z.union([z.array(clubEventSchema), clubEventSchema]),
+      {
+        method: 'get',
+        path: `club/${this.options.clubId}/events/${encodeURIComponent(eventId)}`,
+        contentType: 'application/json',
+        params,
+      },
+    );
+
+    const event = Array.isArray(result) ? result[0] : result;
+    if (!event) {
+      throw new VirtuaGymApiError(
+        420,
+        `Event ${eventId} was not found in the response`,
+      );
+    }
+    return event;
+  }
+
   private async mutateEmployee(
     path: string,
     data: UpdateEmployeeData,
@@ -238,6 +336,22 @@ export interface EmployeesOptions extends EmployeeOptions {
   readonly syncFrom?: number;
   /** Filter on the Rf-ID tag that is tied to the employee. */
   readonly rfidTag?: string;
+}
+
+export interface ClubEventOptions {
+  /** Only consider events edited on/after this timestamp (ms). Defaults to 0. */
+  readonly syncFrom?: number;
+}
+
+export interface ClubEventsOptions extends ClubEventOptions {
+  /** Start of the event time range (timestamp in seconds). */
+  readonly timestampStart?: number;
+  /** End of the event time range (timestamp in seconds). */
+  readonly timestampEnd?: number;
+  /** Only events booked by this member. */
+  readonly memberId?: number;
+  /** Only events belonging to this schedule. */
+  readonly scheduleId?: number;
 }
 
 /** Fields shared by all employee mutations. Names match the API's wire format. */

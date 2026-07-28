@@ -1,6 +1,8 @@
 // @golddevelopment/virtuagym-node/client
 export { VirtuaGymClientV1, VirtuaGymApiError } from './virtuagym-client-v1';
 export type {
+  ClubEventOptions,
+  ClubEventsOptions,
   CreateEmployeeData,
   CreateOrUpdateEmployeeData,
   EmployeeMutationData,

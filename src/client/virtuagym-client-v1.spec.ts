@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
+import type { ClubEvent } from '../models/club-event';
 import type { Employee } from '../models/employee';
 import { VirtuaGymApiError, VirtuaGymClientV1 } from './virtuagym-client-v1';
 
@@ -391,6 +392,166 @@ describe('VirtuaGymClientV1', () => {
       await expect(iterator.next()).rejects.toThrow(
         'Request failed with status code 401',
       );
+    });
+  });
+
+  const clubEvent = (event_id: string): ClubEvent => ({
+    event_id,
+    schedule_id: 1,
+    start: '2026-03-02 17:00:00',
+    end: '2026-03-02 18:00:00',
+    title: 'Ski Fit',
+    employee_note: '',
+    club_id: 12345,
+    activity_id: 448,
+    instructor_id: 0,
+    attendees: 0,
+    max_places: 25,
+    bookable: 1,
+    cancel_before_duration: 0,
+    booking_in_advance_duration: '1 months',
+    canceled: false,
+    presence_saved: false,
+    language: '',
+  });
+
+  describe('allEvents', () => {
+    it('retrieves events with all query parameters', async () => {
+      const events = [clubEvent('1945791969-54d4caf4db7821-10175268')];
+      requestMock.mockResolvedValue(envelope(events));
+
+      const result = await client.allEvents({
+        timestampStart: 1456876800,
+        timestampEnd: 1456963200,
+        memberId: 42,
+        scheduleId: 1,
+      });
+
+      expect(result).toEqual(events);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'get',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/events?sync_from=0&timestamp_start=1456876800&timestamp_end=1456963200&member_id=42&schedule_id=1&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('coerces a numeric event_id to string', async () => {
+      requestMock.mockResolvedValue(
+        envelope([{ ...clubEvent('ignored'), event_id: 123456 }]),
+      );
+
+      const [event] = await client.allEvents();
+
+      expect(event?.event_id).toBe('123456');
+    });
+
+    it('advances sync_from to the response timestamp while results remain', async () => {
+      const page1 = [clubEvent('event-1')];
+      const page2 = [clubEvent('event-2')];
+      requestMock
+        .mockResolvedValueOnce({
+          data: {
+            status: {
+              statuscode: 200,
+              statusmessage: 'Everything OK',
+              result_count: 1,
+              timestamp: 1785274600000,
+              results_remaining: 1,
+            },
+            result: page1,
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            status: {
+              statuscode: 200,
+              statusmessage: 'Everything OK',
+              result_count: 1,
+              timestamp: 1785274700000,
+              results_remaining: 0,
+            },
+            result: page2,
+          },
+        });
+
+      const result = await client.allEvents();
+
+      expect(result).toEqual([...page1, ...page2]);
+      expect(requestMock).toHaveBeenCalledTimes(2);
+      expect(requestMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/events?sync_from=1785274600000&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('propagates in-band API errors', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 420,
+          statusmessage: 'timestamp_start must be >= 0',
+          result_count: 0,
+          timestamp: 1439302743,
+        },
+      });
+
+      const error = await client
+        .allEvents({ timestampStart: -1 })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({
+        statuscode: 420,
+        statusmessage: 'timestamp_start must be >= 0',
+      });
+    });
+  });
+
+  describe('events', () => {
+    it('does not yield a page for a club without events', async () => {
+      requestMock.mockResolvedValue(envelope([]));
+
+      const pages = [];
+      for await (const page of client.events()) {
+        pages.push(page);
+      }
+
+      expect(pages).toEqual([]);
+    });
+  });
+
+  describe('event', () => {
+    it('retrieves a single event by id, url-encoding the id', async () => {
+      const event = clubEvent('1945791969-54d4caf4db7821-10175268');
+      requestMock.mockResolvedValue(envelope([event]));
+
+      const result = await client.event('1945791969-54d4caf4db7821-10175268');
+
+      expect(result).toEqual(event);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/events/1945791969-54d4caf4db7821-10175268?sync_from=0&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('accepts a bare object result', async () => {
+      const event = clubEvent('event-1');
+      requestMock.mockResolvedValue(envelope(event));
+
+      const result = await client.event('event-1');
+
+      expect(result).toEqual(event);
+    });
+
+    it('throws VirtuaGymApiError when the result array is empty', async () => {
+      requestMock.mockResolvedValue(envelope([]));
+
+      const error = await client.event('missing').catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({ statuscode: 420 });
     });
   });
 });

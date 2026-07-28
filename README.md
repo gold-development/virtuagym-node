@@ -108,6 +108,46 @@ All mutations return the canonical, fully validated `Employee` record (the clien
 
 Supported privileges: `club_manager`, `assistent_manager`, `marketing_manager`, `coach`, `financial`, `employee`, `scheduling`, `default` (typed as `EmployeePrivilege`).
 
+## Club events
+
+### List events
+
+```ts
+const now = Math.floor(Date.now() / 1000);
+
+// Lazily, page by page
+for await (const page of client.events({ scheduleId: 1 })) {
+  console.log(`received ${page.length} events`);
+}
+
+// Or collect everything matching the query
+const events = await client.allEvents({
+  timestampStart: now,            // seconds
+  timestampEnd: now + 7 * 86400,  // seconds
+  memberId: 7302399,              // only events booked by this member
+});
+```
+
+Options (both methods):
+
+| Option           | Type     | Description                                                    |
+| ---------------- | -------- | -------------------------------------------------------------- |
+| `syncFrom`       | `number` | Only events edited on/after this timestamp (**milliseconds**). |
+| `timestampStart` | `number` | Start of the event time range (**seconds**).                   |
+| `timestampEnd`   | `number` | End of the event time range (**seconds**).                     |
+| `memberId`       | `number` | Only events booked by this member.                             |
+| `scheduleId`     | `number` | Only events belonging to this schedule.                        |
+
+Note the API's unit mismatch: `syncFrom` is in milliseconds while the range timestamps are in seconds.
+
+### Get a single event
+
+```ts
+const event = await client.event('1945791969-54d4caf4db7821-10175268');
+```
+
+Event `start`/`end` are datetime strings (`"YYYY-MM-DD HH:mm:ss"`) in the **club's timezone**, and `event_id` is a string.
+
 ## Models
 
 Types and zod schemas are importable separately — handy in a frontend that only needs the shapes:
