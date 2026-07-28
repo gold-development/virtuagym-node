@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ZodError } from 'zod';
 import type { ClubEvent } from '../models/club-event';
 import type { Employee } from '../models/employee';
+import type { Member } from '../models/member';
 import { VirtuaGymApiError, VirtuaGymClientV1 } from './virtuagym-client-v1';
 
 const { requestMock } = vi.hoisted(() => ({ requestMock: vi.fn() }));
@@ -392,6 +393,320 @@ describe('VirtuaGymClientV1', () => {
       await expect(iterator.next()).rejects.toThrow(
         'Request failed with status code 401',
       );
+    });
+  });
+
+  const member = (member_id: number, timestamp_edit: number): Member => ({
+    member_id,
+    club_id: 12345,
+    firstname: 'John',
+    lastname: 'Doe',
+    email: 'john.doe@example.com',
+    active: true,
+    is_pro: false,
+    member_since: 1700000000000,
+    timestamp_edit,
+  });
+
+  describe('allMembers', () => {
+    it('retrieves members with filter options', async () => {
+      const members = [member(1, 1785274500000)];
+      requestMock.mockResolvedValue(envelope(members));
+
+      const result = await client.allMembers({
+        externalId: 'ext-1',
+        email: 'john.doe@example.com',
+        with: 'memberships',
+      });
+
+      expect(result).toEqual(members);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member?sync_from=0&external_id=ext-1&email=john.doe%40example.com&with=memberships&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('follows pagination until no results remain', async () => {
+      const page1 = [member(1, 1785274500000), member(2, 1785274510000)];
+      const page2 = [member(3, 1785274520000)];
+      requestMock
+        .mockResolvedValueOnce(envelope(page1, 50))
+        .mockResolvedValueOnce(envelope(page2, 0));
+
+      const result = await client.allMembers();
+
+      expect(result).toEqual([...page1, ...page2]);
+      expect(requestMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member?sync_from=1785274510000&from_id=2&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('prefers the server-computed next_page cursor over the last item', async () => {
+      const page1 = [member(1, 1785274500000)];
+      const page2 = [member(2, 1785274510000)];
+      requestMock
+        .mockResolvedValueOnce({
+          data: {
+            status: {
+              statuscode: 200,
+              statusmessage: 'Everything OK',
+              result_count: 1,
+              timestamp: 1785274537785,
+              results_remaining: 1,
+              next_page: 'sync_from=1785274999999',
+            },
+            result: page1,
+          },
+        })
+        .mockResolvedValueOnce(envelope(page2, 0));
+
+      const result = await client.allMembers();
+
+      expect(result).toEqual([...page1, ...page2]);
+      expect(requestMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member?sync_from=1785274999999&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('accepts a docs-style member_since date string', async () => {
+      requestMock.mockResolvedValue(
+        envelope([{ ...member(1, 1785274500000), member_since: '2015-01-14' }]),
+      );
+
+      const [result] = await client.allMembers();
+
+      expect(result?.member_since).toBe('2015-01-14');
+    });
+  });
+
+  describe('member', () => {
+    it('retrieves a single member with embedded memberships', async () => {
+      const john: Member = {
+        ...member(7, 1785274500000),
+        memberships: [
+          {
+            instance_id: 2720,
+            member_id: 7,
+            membership_id: 596,
+            active: 1,
+            cancelled: 0,
+            contract_autorenewed: 0,
+            completed: 0,
+            paused: 0,
+            stopped: 0,
+            start_date: '2026-01-29',
+            contract_start_date: '2026-02-01',
+            contract_end_date: '2026-06-09',
+            membership_name: 'Bodytec',
+          },
+        ],
+      };
+      requestMock.mockResolvedValue(envelope([john]));
+
+      const result = await client.member(7, { with: 'memberships' });
+
+      expect(result).toEqual(john);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member/7?with=memberships&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('throws VirtuaGymApiError when the member does not exist', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 420,
+          statusmessage: 'No member found.',
+          result_count: 0,
+          timestamp: 1439302743,
+        },
+      });
+
+      await expect(client.member(999)).rejects.toThrow(
+        'Virtuagym API error 420: No member found.',
+      );
+    });
+  });
+
+  describe('member mutations', () => {
+    it('creates a member and returns the canonical record', async () => {
+      const created = member(77338, 1785274500000);
+      requestMock
+        .mockResolvedValueOnce(envelope({ member_id: 77338, active: 1 }))
+        .mockResolvedValueOnce(envelope([created]));
+
+      const result = await client.createMember({
+        firstname: 'John',
+        lastname: 'Doe',
+        email: 'john@example.com',
+        level_id: 2,
+        goal_id: 4,
+        filled_intake_questionnaire: 1,
+      });
+
+      expect(result).toEqual(created);
+      expect(requestMock).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          method: 'put',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member?api_key=test-api-key&club_secret=test-club-secret',
+          data: {
+            firstname: 'John',
+            lastname: 'Doe',
+            email: 'john@example.com',
+            level_id: 2,
+            goal_id: 4,
+            filled_intake_questionnaire: 1,
+          },
+        }),
+      );
+    });
+
+    it('updates a member via its member_id', async () => {
+      const updated = member(77338, 1785274520000);
+      requestMock
+        .mockResolvedValueOnce(envelope({ member_id: 77338 }))
+        .mockResolvedValueOnce(envelope([updated]));
+
+      const result = await client.updateMember(77338, { gender: 'f' });
+
+      expect(result).toEqual(updated);
+      expect(requestMock).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          method: 'put',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member/77338?api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('accepts the 201 statuscode returned when create_or_update creates', async () => {
+      const created = member(77338, 1785274520000);
+      requestMock
+        .mockResolvedValueOnce({
+          data: {
+            status: {
+              statuscode: 201,
+              statusmessage: 'Everything OK',
+              result_count: 10,
+              timestamp: 1478252652810,
+            },
+            result: { member_id: 77338 },
+          },
+        })
+        .mockResolvedValueOnce(envelope([created]));
+
+      const result = await client.createOrUpdateMember({
+        external_id: '1ABC234567',
+        firstname: 'John',
+        lastname: 'Doe',
+      });
+
+      expect(result).toEqual(created);
+      expect(requestMock).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member/create_or_update?api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('re-fetches across sub-clubs after a transfer', async () => {
+      const transferred = { ...member(12345, 1785274520000), club_id: 106 };
+      requestMock
+        // create_or_update with club_external_id moved the member.
+        .mockResolvedValueOnce(envelope({ member_id: 12345 }))
+        // Plain re-fetch fails: member no longer belongs to this club.
+        .mockResolvedValueOnce({
+          data: {
+            statuscode: 420,
+            statusmessage: 'No member found.',
+            result_count: 0,
+            timestamp: 1439302743,
+          },
+        })
+        .mockResolvedValueOnce(envelope([transferred]));
+
+      const result = await client.createOrUpdateMember({
+        external_id: 'member_extid123',
+        club_external_id: 'externalid_subclub2',
+      });
+
+      expect(result).toEqual(transferred);
+      expect(requestMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member/12345?any_sub_club=1&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('activateUser', () => {
+    it('activates a user profile for a member', async () => {
+      requestMock.mockResolvedValue(
+        envelope({ member_id: 1001, user_id: 101, club_id: 104 }),
+      );
+
+      const result = await client.activateUser({
+        email: 'user@example.com',
+        password: 'secret-password',
+        member_identifier: { type: 'member_id', value: 1001 },
+      });
+
+      expect(result).toEqual({ member_id: 1001, user_id: 101, club_id: 104 });
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'post',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member/activate_user?api_key=test-api-key&club_secret=test-club-secret',
+          data: {
+            email: 'user@example.com',
+            password: 'secret-password',
+            member_identifier: { type: 'member_id', value: 1001 },
+          },
+        }),
+      );
+    });
+
+    it('surfaces validation errors from the nested error envelope', async () => {
+      // 406 responses carry status + errors but no result.
+      requestMock.mockResolvedValue({
+        data: {
+          status: {
+            statuscode: 406,
+            statusmessage: 'Invalid request',
+            result_count: 0,
+            timestamp: 1575366533123,
+          },
+          errors: [
+            { type: 'Password too short' },
+            { type: 'No member identifier could be found' },
+          ],
+        },
+      });
+
+      const error = await client
+        .activateUser({
+          email: 'user@example.com',
+          password: 'x',
+          member_identifier: { type: 'member_id', value: 1001 },
+        })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({
+        statuscode: 406,
+        statusmessage: 'Invalid request',
+        errors: [
+          { type: 'Password too short' },
+          { type: 'No member identifier could be found' },
+        ],
+      });
     });
   });
 

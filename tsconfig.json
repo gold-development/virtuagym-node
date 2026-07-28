@@ -4,6 +4,11 @@
     // TS 6 no longer auto-includes node_modules/@types.
     "types": ["node"]
   },
-  "include": ["src", "tsup.config.ts", "vitest.smoke.config.ts"],
+  "include": [
+    "src",
+    "tsup.config.ts",
+    "vitest.config.ts",
+    "vitest.smoke.config.ts"
+  ],
   "exclude": []
 }

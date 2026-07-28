@@ -32,6 +32,30 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     }
   });
 
+  it('retrieves all members across pages without duplicates', async () => {
+    const members = await client.allMembers();
+
+    expect(members.length).toBeGreaterThan(0);
+    // Pagination must not duplicate or drop members across page boundaries.
+    const uniqueIds = new Set(members.map((m) => m.member_id));
+    expect(uniqueIds.size).toBe(members.length);
+  });
+
+  it('retrieves a single member with memberships from the live API', async () => {
+    const { value: firstPage } = await client.members().next();
+    const first = firstPage?.[0];
+    if (!first) {
+      throw new Error('Club has no members to smoke-test against');
+    }
+
+    const single = await client.member(first.member_id, {
+      with: 'memberships',
+    });
+
+    expect(single.member_id).toBe(first.member_id);
+    expect(Array.isArray(single.memberships)).toBe(true);
+  });
+
   it('retrieves club events from the live API', async () => {
     const now = Math.floor(Date.now() / 1000);
     const events = await client.allEvents({

@@ -29,7 +29,8 @@ export const employeeSchema = z.object({
   email: z.string(),
   active: z.boolean(),
   is_pro: z.boolean(),
-  gender: z.enum(['m', 'f']).optional(),
+  /** Documented as "m"/"f", but "u" (unspecified) occurs in live data. */
+  gender: z.string().optional(),
   /** Timestamp (ms) the employee made an account. */
   member_since: z.number(),
   /** Timestamp (ms) the employee's information last changed. Used as pagination cursor. */

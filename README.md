@@ -1,5 +1,9 @@
 # @golddevelopment/virtuagym-node
 
+[![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/gold-development/virtuagym-node/branch/main/graph/badge.svg)](https://codecov.io/gh/gold-development/virtuagym-node)
+[![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
+
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
 
 - **TypeScript-first** — full typings, validated at runtime with [zod](https://zod.dev): responses that don't match the documented schema fail loudly instead of corrupting your data.
@@ -107,6 +111,73 @@ const upserted = await client.createOrUpdateEmployee({
 All mutations return the canonical, fully validated `Employee` record (the client re-fetches it after the mutation, because the API's PUT responses use inconsistent field formats).
 
 Supported privileges: `club_manager`, `assistent_manager`, `marketing_manager`, `coach`, `financial`, `employee`, `scheduling`, `default` (typed as `EmployeePrivilege`).
+
+## Members
+
+### List members
+
+```ts
+// Lazily, page by page (pages of 500)
+for await (const page of client.members()) {
+  console.log(`received ${page.length} members`);
+}
+
+// Or collect everything
+const everyone = await client.allMembers();
+
+// Incremental sync
+const changed = await client.allMembers({ syncFrom: lastSyncTimestamp });
+```
+
+Options: `syncFrom` (ms), `clubMemberId`, `rfidTag`, `externalId`, `email`, `anySubClub`, and `with`.
+
+### Get a single member
+
+```ts
+const member = await client.member(7302399);
+
+// With membership instances embedded:
+const member = await client.member(7302399, { with: 'memberships' });
+member.memberships; // MembershipInstance[]
+```
+
+`with` accepts `'memberships'` (all) or `'active_memberships'`.
+
+### Create, update, upsert, transfer
+
+```ts
+const created = await client.createMember({
+  firstname: 'John',
+  lastname: 'Doe',
+  email: 'john@example.com',
+  level_id: 2,
+  goal_id: 4,
+});
+
+const updated = await client.updateMember(created.member_id, { gender: 'f' });
+
+// Matched on external_id; also transfers between sub-clubs when
+// club_external_id targets another sub-club (use the super club's id+secret)
+const upserted = await client.createOrUpdateMember({
+  external_id: '1ABC234567',
+  firstname: 'John',
+  lastname: 'Doe',
+});
+```
+
+Like employee mutations, member mutations re-fetch and return the canonical validated record. After a sub-club transfer the re-fetch automatically retries with `any_sub_club=1`.
+
+### Activate a user account
+
+```ts
+const { user_id } = await client.activateUser({
+  email: 'user@example.com',
+  password: 'their-new-password',
+  member_identifier: { type: 'member_id', value: 7302399 },
+});
+```
+
+Set `connect_to_existing: true` (and omit `password`) to connect the member to an existing user account. Validation failures throw `VirtuaGymApiError` with the endpoint's error list in `error.errors`.
 
 ## Club events
 
