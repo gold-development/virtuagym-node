@@ -1,27 +1,5 @@
 import { z } from 'zod';
-
-/** A membership instance as embedded by `with=memberships`/`active_memberships`. */
-export const membershipInstanceSchema = z.object({
-  instance_id: z.number(),
-  member_id: z.number(),
-  membership_id: z.number(),
-  /** 1 = true, 0 = false. */
-  active: z.union([z.literal(0), z.literal(1)]).optional(),
-  cancelled: z.union([z.literal(0), z.literal(1)]).optional(),
-  contract_autorenewed: z.union([z.literal(0), z.literal(1)]).optional(),
-  completed: z.union([z.literal(0), z.literal(1)]).optional(),
-  paused: z.union([z.literal(0), z.literal(1)]).optional(),
-  stopped: z.union([z.literal(0), z.literal(1)]).optional(),
-  /** YYYY-MM-DD. */
-  start_date: z.string().optional(),
-  contract_start_date: z.string().optional(),
-  contract_end_date: z.string().optional(),
-  membership_name: z.string().optional(),
-});
-
-export type MembershipInstance = Readonly<
-  z.infer<typeof membershipInstanceSchema>
->;
+import { membershipInstanceSchema } from './membership';
 
 export const memberSchema = z.object({
   /** The ID for the member ("Member ID" in Virtuagym). */

@@ -56,6 +56,23 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     expect(Array.isArray(single.memberships)).toBe(true);
   });
 
+  it('retrieves all membership instances across pages without duplicates', async () => {
+    const instances = await client.allMembershipInstances();
+
+    const uniqueIds = new Set(instances.map((i) => i.instance_id));
+    expect(uniqueIds.size).toBe(instances.length);
+    for (const instance of instances) {
+      expect(typeof instance.active).toBe('boolean');
+    }
+  });
+
+  it('retrieves all membership definitions across pages without duplicates', async () => {
+    const definitions = await client.allMembershipDefinitions();
+
+    const uniqueIds = new Set(definitions.map((d) => d.membership_id));
+    expect(uniqueIds.size).toBe(definitions.length);
+  });
+
   it('retrieves club events from the live API', async () => {
     const now = Math.floor(Date.now() / 1000);
     const events = await client.allEvents({

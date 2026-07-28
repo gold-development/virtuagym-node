@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-94.79%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-95.87%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -178,6 +178,40 @@ const { user_id } = await client.activateUser({
 ```
 
 Set `connect_to_existing: true` (and omit `password`) to connect the member to an existing user account. Validation failures throw `VirtuaGymApiError` with the endpoint's error list in `error.errors`.
+
+## Memberships
+
+### Membership instances (contracts of members)
+
+```ts
+// All instances of the club, or lazily page by page via client.membershipInstances()
+const instances = await client.allMembershipInstances();
+
+// Only one member's instances
+const theirs = await client.allMembershipInstances({ memberId: 7302399 });
+```
+
+### Create a membership instance (assign a contract)
+
+```ts
+const contract = await client.createMembershipInstance({
+  membership_id: 10215539,
+  member_id: 7302399,
+  start_date: '2026-08-01',
+  payment_method: 'direct_debit',
+  salesperson_id: 12345,
+  // optional: discount_id + discount_start_date, or custom_discount, contract_notes, bill_to
+});
+```
+
+### Membership definitions (the products a club sells)
+
+```ts
+// All definitions, or lazily page by page (25/page) via client.membershipDefinitions()
+const definitions = await client.allMembershipDefinitions({ status: 'active' });
+```
+
+`status` accepts `'all'` (API default), `'active'`, or `'inactive'`.
 
 ## Club events
 

@@ -7,6 +7,14 @@ import {
   type EmployeePrivilege,
 } from '../models/employee';
 import { memberSchema, type Member } from '../models/member';
+import {
+  membershipContractSchema,
+  membershipDefinitionSchema,
+  membershipInstanceSchema,
+  type MembershipContract,
+  type MembershipDefinition,
+  type MembershipInstance,
+} from '../models/membership';
 import type { VirtuaGymClientV1Options } from './virtuagym-client-v1-options';
 
 /** An error reported by the Virtuagym API itself (which can arrive with HTTP 200). */
@@ -434,6 +442,131 @@ export class VirtuaGymClientV1 {
     return result;
   }
 
+  /** Retrieves every membership instance matching the query across all pages. */
+  public async allMembershipInstances(
+    options: MembershipInstancesOptions = {},
+  ): Promise<MembershipInstance[]> {
+    const instances: MembershipInstance[] = [];
+    for await (const page of this.membershipInstances(options)) {
+      instances.push(...page);
+    }
+    return instances;
+  }
+
+  /**
+   * Yields membership instances page by page, fetching each page lazily.
+   */
+  public async *membershipInstances(
+    options: MembershipInstancesOptions = {},
+  ): AsyncGenerator<MembershipInstance[], void, undefined> {
+    const syncFrom = options.syncFrom ?? 0;
+    // from_id is sent from the very first call (0 is documented as valid):
+    // without it the API orders results by timestamp instead of instance_id
+    // and the instance_id cursor tears across pages.
+    let fromId = 0;
+
+    for (;;) {
+      const params = new URLSearchParams();
+      params.set('sync_from', syncFrom.toString());
+      params.set('from_id', fromId.toString());
+      if (options.memberId !== undefined) {
+        params.set('member_id', options.memberId.toString());
+      }
+
+      const { result, status } = await this.request(
+        z.array(membershipInstanceSchema),
+        {
+          method: 'get',
+          path: `club/${this.options.clubId}/membership/instance`,
+          contentType: 'application/json',
+          params,
+        },
+      );
+      if (result.length > 0) {
+        yield result;
+      }
+
+      const last = result[result.length - 1];
+      if ((status.results_remaining ?? 0) <= 0 || !last) {
+        return;
+      }
+      // Live testing: results are ordered by instance_id and from_id is
+      // INCLUSIVE, while the next_page sync_from cursor duplicates rows on
+      // timestamp ties — so page on instance_id + 1.
+      fromId = last.instance_id + 1;
+    }
+  }
+
+  /**
+   * Creates a membership instance (contract) assigning an existing
+   * membership definition to an existing member, and returns the created
+   * contract.
+   */
+  public async createMembershipInstance(
+    data: CreateMembershipInstanceData,
+  ): Promise<MembershipContract> {
+    const { result } = await this.request(membershipContractSchema, {
+      method: 'post',
+      path: `club/${this.options.clubId}/membership/instance`,
+      contentType: 'application/json',
+      data,
+    });
+    return result;
+  }
+
+  /** Retrieves every membership definition matching the query across all pages. */
+  public async allMembershipDefinitions(
+    options: MembershipDefinitionsOptions = {},
+  ): Promise<MembershipDefinition[]> {
+    const definitions: MembershipDefinition[] = [];
+    for await (const page of this.membershipDefinitions(options)) {
+      definitions.push(...page);
+    }
+    return definitions;
+  }
+
+  /**
+   * Yields membership definitions page by page (25 per page), fetching each
+   * page lazily.
+   */
+  public async *membershipDefinitions(
+    options: MembershipDefinitionsOptions = {},
+  ): AsyncGenerator<MembershipDefinition[], void, undefined> {
+    const syncFrom = options.syncFrom ?? 0;
+    let page: number | undefined;
+
+    for (;;) {
+      const params = new URLSearchParams();
+      params.set('sync_from', syncFrom.toString());
+      if (options.status) {
+        params.set('status', options.status);
+      }
+      if (page !== undefined) {
+        params.set('page', page.toString());
+      }
+
+      const { result, status } = await this.request(
+        z.array(membershipDefinitionSchema),
+        {
+          method: 'get',
+          path: `club/${this.options.clubId}/membership/definition`,
+          contentType: 'application/json',
+          params,
+        },
+      );
+      if (result.length > 0) {
+        yield result;
+      }
+
+      if ((status.results_remaining ?? 0) <= 0 || result.length === 0) {
+        return;
+      }
+      // Live testing: the page parameter paginates exactly, while the
+      // next_page sync_from cursor duplicates rows on timestamp ties.
+      page = (page ?? 1) + 1;
+    }
+  }
+
   private async mutateMember(
     path: string,
     data: UpdateMemberData,
@@ -585,6 +718,61 @@ export interface MembersOptions extends MemberOptions {
   readonly externalId?: string;
   /** Filter on the member's email address. */
   readonly email?: string;
+}
+
+export interface MembershipInstancesOptions {
+  /** Only instances edited on/after this timestamp (ms). Defaults to 0. */
+  readonly syncFrom?: number;
+  /** Only membership instances of this member. */
+  readonly memberId?: number;
+}
+
+export interface MembershipDefinitionsOptions {
+  /** Only definitions edited on/after this timestamp (ms). Defaults to 0. */
+  readonly syncFrom?: number;
+  /** Filter on membership status. The API defaults to 'all'. */
+  readonly status?: 'all' | 'active' | 'inactive';
+}
+
+export interface CustomDiscount {
+  /** Amount of the discount (> 0). */
+  readonly discount_amount: number;
+  /**
+   * Type of discount. The docs list "percentage"/"monetary", their examples
+   * use "percent", and the error messages mention "fixed".
+   */
+  readonly discount_amount_type: string;
+  /** Start date of the discount (YYYY-MM-DD). */
+  readonly discount_start_date: string;
+  readonly discount_duration?: {
+    /** Number of weeks/months (> 0). */
+    readonly time: number;
+    readonly term: 'weeks' | 'months';
+  };
+}
+
+/** Body for creating a membership instance. Names match the API's wire format. */
+export interface CreateMembershipInstanceData {
+  /** ID of the membership definition to assign. */
+  readonly membership_id: number;
+  /** ID of the member to assign the membership to. */
+  readonly member_id: number;
+  /** Start date of the contract (YYYY-MM-DD). */
+  readonly start_date: string;
+  /** E.g. "cash", "card", "direct_debit". */
+  readonly payment_method: string;
+  /** ID of the salesperson who sold the contract. */
+  readonly salesperson_id: number;
+  /** ID of a preset discount to apply. Mutually exclusive with custom_discount. */
+  readonly discount_id?: number;
+  /** Start date of the preset discount; required when discount_id is set. */
+  readonly discount_start_date?: string;
+  /** Mutually exclusive with discount_id. */
+  readonly custom_discount?: CustomDiscount;
+  /** Additional notes for the contract (max 1000 characters). */
+  readonly contract_notes?: string;
+  /** Business GUID if billing to a business. */
+  readonly bill_to?: string;
 }
 
 /** Fields shared by all member mutations. Names match the API's wire format. */

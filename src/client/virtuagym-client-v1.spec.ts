@@ -485,32 +485,46 @@ describe('VirtuaGymClientV1', () => {
   });
 
   describe('member', () => {
-    it('retrieves a single member with embedded memberships', async () => {
-      const john: Member = {
-        ...member(7, 1785274500000),
-        memberships: [
-          {
-            instance_id: 2720,
-            member_id: 7,
-            membership_id: 596,
-            active: 1,
-            cancelled: 0,
-            contract_autorenewed: 0,
-            completed: 0,
-            paused: 0,
-            stopped: 0,
-            start_date: '2026-01-29',
-            contract_start_date: '2026-02-01',
-            contract_end_date: '2026-06-09',
-            membership_name: 'Bodytec',
-          },
-        ],
+    it('retrieves a single member with embedded memberships, normalizing 0/1 flags', async () => {
+      // The docs show 0/1 flags on embedded memberships; the schema
+      // normalizes them to booleans.
+      const wireMembership = {
+        instance_id: 2720,
+        member_id: 7,
+        membership_id: 596,
+        active: 1,
+        cancelled: 0,
+        contract_autorenewed: 0,
+        completed: 0,
+        paused: 0,
+        stopped: 0,
+        start_date: '2026-01-29',
+        contract_start_date: '2026-02-01',
+        contract_end_date: '2026-06-09',
+        membership_name: 'Bodytec',
       };
-      requestMock.mockResolvedValue(envelope([john]));
+      requestMock.mockResolvedValue(
+        envelope([
+          { ...member(7, 1785274500000), memberships: [wireMembership] },
+        ]),
+      );
 
       const result = await client.member(7, { with: 'memberships' });
 
-      expect(result).toEqual(john);
+      expect(result).toEqual({
+        ...member(7, 1785274500000),
+        memberships: [
+          {
+            ...wireMembership,
+            active: true,
+            cancelled: false,
+            contract_autorenewed: false,
+            completed: false,
+            paused: false,
+            stopped: false,
+          },
+        ],
+      });
       expect(requestMock).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({
           url: 'https://api.virtuagym.com/api/v1/club/12345/member/7?with=memberships&api_key=test-api-key&club_secret=test-club-secret',
@@ -707,6 +721,185 @@ describe('VirtuaGymClientV1', () => {
           { type: 'No member identifier could be found' },
         ],
       });
+    });
+  });
+
+  const membershipInstance = (instance_id: number) => ({
+    instance_id,
+    member_id: 77038,
+    membership_id: 584,
+    active: false,
+    cancelled: true,
+    contract_autorenewed: false,
+    completed: true,
+    paused: false,
+    stopped: false,
+    start_date: '2026-04-01',
+    contract_start_date: '2026-05-01',
+    contract_end_date: '2026-07-31',
+    membership_name: 'Test',
+  });
+
+  describe('membershipInstances', () => {
+    it('retrieves instances filtered by member', async () => {
+      const instances = [membershipInstance(2537)];
+      requestMock.mockResolvedValue(envelope(instances));
+
+      const result = await client.allMembershipInstances({ memberId: 77038 });
+
+      expect(result).toEqual(instances);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/membership/instance?sync_from=0&from_id=0&member_id=77038&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('pages on from_id = last instance_id + 1 (from_id is inclusive)', async () => {
+      const page1 = [membershipInstance(1), membershipInstance(2)];
+      const page2 = [membershipInstance(3)];
+      requestMock
+        .mockResolvedValueOnce(envelope(page1, 1))
+        .mockResolvedValueOnce(envelope(page2, 0));
+
+      const result = await client.allMembershipInstances();
+
+      expect(result).toEqual([...page1, ...page2]);
+      expect(requestMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/membership/instance?sync_from=0&from_id=3&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('createMembershipInstance', () => {
+    it('creates a contract and coerces contract_number to string', async () => {
+      requestMock.mockResolvedValue(
+        envelope({
+          id: 988796319,
+          contract_number: 2037,
+          membership_id: 10215539,
+          member_id: 1750534197,
+          start_date: '2026-06-22',
+          contract_start_date: '2026-07-01',
+          contract_end_date: '2027-06-30',
+          contract_active: true,
+          contract_payment_method: 'cash',
+          discount_duration: {
+            discount_duration_time: null,
+            discount_duration_term: null,
+          },
+        }),
+      );
+
+      const contract = await client.createMembershipInstance({
+        membership_id: 10215539,
+        member_id: 1750534197,
+        start_date: '2026-06-22',
+        payment_method: 'cash',
+        salesperson_id: -5,
+      });
+
+      expect(contract.contract_number).toBe('2037');
+      expect(contract.contract_active).toBe(true);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'post',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/membership/instance?api_key=test-api-key&club_secret=test-club-secret',
+          data: {
+            membership_id: 10215539,
+            member_id: 1750534197,
+            start_date: '2026-06-22',
+            payment_method: 'cash',
+            salesperson_id: -5,
+          },
+        }),
+      );
+    });
+
+    it('propagates in-band validation errors', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 400,
+          statusmessage: "Field 'membership_id' is required",
+          result_count: 0,
+          timestamp: 1755014123353,
+        },
+      });
+
+      const error = await client
+        .createMembershipInstance({
+          membership_id: 0,
+          member_id: 1,
+          start_date: '2026-06-22',
+          payment_method: 'cash',
+          salesperson_id: 1,
+        })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({ statuscode: 400 });
+    });
+  });
+
+  describe('membershipDefinitions', () => {
+    const definition = (membership_id: number) => ({
+      membership_id,
+      membership_name: 'Basistarif 1',
+      membership_group: 'default',
+      membership_available_online: false,
+      membership_duration: 6,
+      membership_duration_type: 'months',
+      membership_auto_renew: true,
+      membership_pro_rata_start: false,
+      membership_price: 79,
+      membership_price_term: 'monthly',
+      // The API returns tax_id both as number and as numeric string.
+      membership_club_tax: {
+        tax_id: '1',
+        tax_name: 'BTW 21%',
+        tax_percentage: 21,
+      },
+      default_payment_method: 'direct_debit',
+    });
+
+    it('retrieves definitions with a status filter, coercing tax_id', async () => {
+      requestMock.mockResolvedValue(envelope([definition(5774756)]));
+
+      const result = await client.allMembershipDefinitions({
+        status: 'active',
+      });
+
+      expect(result[0]?.membership_club_tax?.tax_id).toBe(1);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/membership/definition?sync_from=0&status=active&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('pages with the page parameter while results remain', async () => {
+      requestMock
+        .mockResolvedValueOnce(envelope([definition(1)], 120))
+        .mockResolvedValueOnce(envelope([definition(2)], 95))
+        .mockResolvedValueOnce(envelope([definition(3)], 0));
+
+      const result = await client.allMembershipDefinitions();
+
+      expect(result.map((d) => d.membership_id)).toEqual([1, 2, 3]);
+      expect(requestMock).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/membership/definition?sync_from=0&page=2&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+      expect(requestMock).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/membership/definition?sync_from=0&page=3&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
     });
   });
 
