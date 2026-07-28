@@ -43,7 +43,7 @@
   "scripts": {
     "lint": "eslint .",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage && node scripts/update-coverage-badge.mjs",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "build": "npm run typecheck && tsup",

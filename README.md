@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/gold-development/virtuagym-node/branch/main/graph/badge.svg)](https://codecov.io/gh/gold-development/virtuagym-node)
+![coverage](https://img.shields.io/badge/coverage-94.79%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -254,8 +254,9 @@ Three kinds of errors can surface:
 
 ```bash
 npm install
-npm test            # unit tests (offline, mocked HTTP)
-npm run build       # typecheck + build ESM/CJS bundles into dist/
+npm test               # unit tests (offline, mocked HTTP)
+npm run test:coverage  # unit tests + coverage report; refreshes the README badge
+npm run build          # typecheck + build ESM/CJS bundles into dist/
 
 # Smoke tests against the live API (read-only):
 cp .env.example .env  # then fill in your credentials

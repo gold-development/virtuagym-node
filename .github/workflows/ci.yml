@@ -22,10 +22,11 @@ jobs:
       # Unit tests only — smoke tests need live credentials and are run locally.
       - run: npm run test:coverage
       - run: npm run build
-      - name: Upload coverage to Codecov
+      - name: Coverage report in job summary
         if: matrix.node-version == '22.x'
-        uses: codecov/codecov-action@v7
-        with:
-          files: coverage/lcov.info
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+        run: |
+          echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Metric | % | Covered / Total |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.total | to_entries[] | "| \(.key) | \(.value.pct)% | \(.value.covered) / \(.value.total) |"' \
+            coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"

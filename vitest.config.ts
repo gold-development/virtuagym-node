@@ -7,7 +7,7 @@ export default defineConfig({
       include: ['src/**'],
       // Smoke tests only run locally against the live API.
       exclude: ['src/**/*.spec.ts', 'src/**/*.smoke.ts'],
-      reporter: ['text', 'lcov'],
+      reporter: ['text', 'lcov', 'json-summary'],
     },
   },
 });
