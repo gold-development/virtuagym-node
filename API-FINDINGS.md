@@ -2,9 +2,8 @@
 
 Findings from building and live-testing a typed client
 ([@golddevelopment/virtuagym-node](https://github.com/gold-development/virtuagym-node))
-against the documented Employee, Member, Club Events, Membership Instance and
-Membership Definition resources. Every item below was verified against the
-live API (July 2026) unless marked "docs-internal inconsistency".
+against all 15 documented v1 resources. Every item below was verified against
+the live API (July 2026) unless it is a docs-internal inconsistency.
 
 ## Pagination
 
@@ -94,6 +93,18 @@ live API (July 2026) unless marked "docs-internal inconsistency".
 22. Employee records return `priviliges` (comma-separated role string) — shown
     in docs examples but missing from the GET STRUCTURE table. (Also note the
     field name's spelling is `priviliges` on the wire.)
+
+## Endpoint shape quirks
+
+23. **Single-resource GETs return one-element arrays**, not objects:
+    `/employee/<id>`, `/member/<id>`, `/events/<id>` all wrap the record in
+    `result: [...]`, while the PUT/POST examples show `result: {...}`.
+24. The member GET list example omits `club_id`, `active` and `is_pro` on one
+    of its two example records although the STRUCTURE table marks them
+    non-optional (live data always includes them).
+25. The employee endpoints support a `with` parameter per the METHODS table,
+    but its accepted values are only documented for members
+    (`memberships` / `active_memberships`).
 
 ## Income categories
 
@@ -191,18 +202,6 @@ live API (July 2026) unless marked "docs-internal inconsistency".
     the full history in one response (no pagination — 873 rows observed in
     a single result). Members without an activated user profile get a
     misleading 404 "Member with member_id X not found in club".
-
-## Endpoint shape quirks
-
-23. **Single-resource GETs return one-element arrays**, not objects:
-    `/employee/<id>`, `/member/<id>`, `/events/<id>` all wrap the record in
-    `result: [...]`, while the PUT/POST examples show `result: {...}`.
-24. The member GET list example omits `club_id`, `active` and `is_pro` on one
-    of its two example records although the STRUCTURE table marks them
-    non-optional (live data always includes them).
-25. The employee endpoints support a `with` parameter per the METHODS table,
-    but its accepted values are only documented for members
-    (`memberships` / `active_memberships`).
 
 ---
 
