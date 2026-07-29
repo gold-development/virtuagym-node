@@ -73,6 +73,17 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     expect(uniqueIds.size).toBe(definitions.length);
   });
 
+  it('retrieves event participants from the live API', async () => {
+    // Default window: (today - 1 month) .. (today + 1 month).
+    const participants = await client.allEventParticipants();
+
+    expect(Array.isArray(participants)).toBe(true);
+    for (const p of participants) {
+      expect(typeof p.event_participant_id).toBe('number');
+      expect(typeof p.event_id).toBe('string');
+    }
+  });
+
   it('retrieves club events from the live API', async () => {
     const now = Math.floor(Date.now() / 1000);
     const events = await client.allEvents({

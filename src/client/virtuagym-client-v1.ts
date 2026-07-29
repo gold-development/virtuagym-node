@@ -6,6 +6,12 @@ import {
   type Employee,
   type EmployeePrivilege,
 } from '../models/employee';
+import {
+  eventParticipantCreatedSchema,
+  eventParticipantSchema,
+  type EventParticipant,
+  type EventParticipantCreated,
+} from '../models/event-participant';
 import { memberSchema, type Member } from '../models/member';
 import {
   membershipContractSchema,
@@ -567,6 +573,163 @@ export class VirtuaGymClientV1 {
     }
   }
 
+  /** Retrieves every event participant matching the query across all pages. */
+  public async allEventParticipants(
+    options: EventParticipantsOptions = {},
+  ): Promise<EventParticipant[]> {
+    const participants: EventParticipant[] = [];
+    for await (const page of this.eventParticipants(options)) {
+      participants.push(...page);
+    }
+    return participants;
+  }
+
+  /**
+   * Yields event participants page by page, fetching each page lazily.
+   *
+   * Without eventId, participants of events starting between timestampStart
+   * and timestampEnd are returned; the API defaults that window to (today -
+   * 1 month) .. (today + 1 month).
+   */
+  public async *eventParticipants(
+    options: EventParticipantsOptions = {},
+  ): AsyncGenerator<EventParticipant[], void, undefined> {
+    let syncFrom = options.syncFrom ?? 0;
+
+    for (;;) {
+      const params = new URLSearchParams();
+      params.set('sync_from', syncFrom.toString());
+      if (options.timestampStart !== undefined) {
+        params.set('timestamp_start', options.timestampStart.toString());
+      }
+      if (options.timestampEnd !== undefined) {
+        params.set('timestamp_end', options.timestampEnd.toString());
+      }
+      if (options.eventId !== undefined) {
+        params.set('event_id', options.eventId);
+      }
+      if (options.fillGuestname) {
+        params.set('fill_guestname', '1');
+      }
+
+      const { result, status } = await this.request(
+        z.array(eventParticipantSchema),
+        {
+          method: 'get',
+          path: `club/${this.options.clubId}/eventparticipants`,
+          contentType: 'application/json',
+          params,
+        },
+      );
+      if (result.length > 0) {
+        yield result;
+      }
+
+      const last = result[result.length - 1];
+      if ((status.results_remaining ?? 0) <= 0 || !last) {
+        return;
+      }
+      // No documented cursor for this endpoint; prefer the server-computed
+      // next_page and guard against a non-advancing fallback cursor.
+      const next = parseNextPage(status.next_page);
+      if (next?.syncFrom !== undefined) {
+        syncFrom = next.syncFrom;
+      } else if (last.timestamp_edit > syncFrom) {
+        syncFrom = last.timestamp_edit;
+      } else {
+        return;
+      }
+    }
+  }
+
+  /**
+   * Retrieves a single event participant (booking) by its ID.
+   *
+   * Throws {@link VirtuaGymApiError} (statuscode 420) when it does not
+   * exist.
+   */
+  public async eventParticipant(
+    eventParticipantId: number,
+    options: EventParticipantOptions = {},
+  ): Promise<EventParticipant> {
+    const params = new URLSearchParams();
+    params.set('sync_from', (options.syncFrom ?? 0).toString());
+    if (options.fillGuestname) {
+      params.set('fill_guestname', '1');
+    }
+
+    const { result } = await this.request(
+      z.union([z.array(eventParticipantSchema), eventParticipantSchema]),
+      {
+        method: 'get',
+        path: `club/${this.options.clubId}/eventparticipants/${eventParticipantId}`,
+        contentType: 'application/json',
+        params,
+      },
+    );
+
+    const participant = Array.isArray(result) ? result[0] : result;
+    if (!participant) {
+      throw new VirtuaGymApiError(
+        420,
+        `Event participant ${eventParticipantId} was not found in the response`,
+      );
+    }
+    return participant;
+  }
+
+  /**
+   * Books a member into an event. Store the returned event_participant_id;
+   * it is needed to update or cancel the booking.
+   *
+   * Booking failures surface as {@link VirtuaGymApiError}, e.g. 430 "Class
+   * is full." or 432 "You do not have enough credits to complete the
+   * booking".
+   */
+  public async createEventParticipant(
+    data: CreateEventParticipantData,
+  ): Promise<EventParticipantCreated> {
+    const { result } = await this.request(eventParticipantCreatedSchema, {
+      method: 'post',
+      path: `club/${this.options.clubId}/eventparticipants`,
+      contentType: 'application/json',
+      data,
+    });
+    return result;
+  }
+
+  /**
+   * Updates an event participant. The API currently only supports updating
+   * ticket_printed.
+   */
+  public async updateEventParticipant(
+    eventParticipantId: number,
+    data: UpdateEventParticipantData,
+  ): Promise<void> {
+    await this.request(z.unknown(), {
+      method: 'put',
+      path: `club/${this.options.clubId}/eventparticipants`,
+      contentType: 'application/json',
+      data: { event_participant_id: eventParticipantId, ...data },
+    });
+  }
+
+  /**
+   * Deletes an event participant, i.e. cancels the booking.
+   *
+   * Throws {@link VirtuaGymApiError} (statuscode 420) when no active event
+   * participant exists.
+   */
+  public async deleteEventParticipant(
+    eventParticipantId: number,
+  ): Promise<void> {
+    await this.request(z.unknown(), {
+      method: 'delete',
+      path: `club/${this.options.clubId}/eventparticipants/${eventParticipantId}`,
+      contentType: 'application/json',
+    });
+  }
+
   private async mutateMember(
     path: string,
     data: UpdateMemberData,
@@ -718,6 +881,39 @@ export interface MembersOptions extends MemberOptions {
   readonly externalId?: string;
   /** Filter on the member's email address. */
   readonly email?: string;
+}
+
+export interface EventParticipantOptions {
+  /** Only consider bookings edited on/after this timestamp (ms). Defaults to 0. */
+  readonly syncFrom?: number;
+  /** Fill user_name with the guest's name. */
+  readonly fillGuestname?: boolean;
+}
+
+export interface EventParticipantsOptions extends EventParticipantOptions {
+  /** Only participants of events starting on/after this timestamp (seconds). */
+  readonly timestampStart?: number;
+  /** Only participants of events starting on/before this timestamp (seconds). */
+  readonly timestampEnd?: number;
+  /** Only participants of this event. */
+  readonly eventId?: string;
+}
+
+/** Body for booking a member into an event. Names match the API's wire format. */
+export interface CreateEventParticipantData {
+  /** Event must belong to the club. */
+  readonly event_id: string;
+  /** Member must belong to the club. */
+  readonly member_id: number;
+  /** Cannot be more than 255 characters. */
+  readonly notes?: string;
+  /** E-mail the member when the booking succeeds. The API defaults to false. */
+  readonly send_email?: boolean;
+}
+
+export interface UpdateEventParticipantData {
+  /** Currently the only updatable attribute, and therefore required. */
+  readonly ticket_printed: boolean;
 }
 
 export interface MembershipInstancesOptions {
@@ -928,7 +1124,7 @@ export interface CreateOrUpdateEmployeeData extends UpdateEmployeeData {
 }
 
 interface IRequestConfig {
-  method: 'get' | 'put' | 'post';
+  method: 'get' | 'put' | 'post' | 'delete';
   path: string;
   params?: URLSearchParams;
   data?: unknown;

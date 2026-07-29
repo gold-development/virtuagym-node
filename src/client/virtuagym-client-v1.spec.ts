@@ -724,6 +724,180 @@ describe('VirtuaGymClientV1', () => {
     });
   });
 
+  const participant = (
+    event_participant_id: number,
+    timestamp_edit: number,
+  ) => ({
+    event_participant_id,
+    event_id: '1977058374-54d4cab74fd424-52808265',
+    member_id: 1233,
+    email_address: 'participant@example.com',
+    notes: '',
+    present: true,
+    absence_reason: '',
+    has_paid: true,
+    ticket_printed: false,
+    timestamp_edit,
+  });
+
+  describe('eventParticipants', () => {
+    it('retrieves participants with all query parameters', async () => {
+      const participants = [participant(49977, 1785274500000)];
+      requestMock.mockResolvedValue(envelope(participants));
+
+      const result = await client.allEventParticipants({
+        timestampStart: 1535328000,
+        timestampEnd: 1535356900,
+        eventId: '1977058374-54d4cab74fd424-52808265',
+        fillGuestname: true,
+      });
+
+      expect(result).toEqual(participants);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/eventparticipants?sync_from=0&timestamp_start=1535328000&timestamp_end=1535356900&event_id=1977058374-54d4cab74fd424-52808265&fill_guestname=1&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('advances the cursor on timestamp_edit while results remain', async () => {
+      const page1 = [participant(1, 1785274500000)];
+      const page2 = [participant(2, 1785274510000)];
+      requestMock
+        .mockResolvedValueOnce(envelope(page1, 1))
+        .mockResolvedValueOnce(envelope(page2, 0));
+
+      const result = await client.allEventParticipants();
+
+      expect(result).toEqual([...page1, ...page2]);
+      expect(requestMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/eventparticipants?sync_from=1785274500000&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('eventParticipant', () => {
+    it('retrieves a single booking by id', async () => {
+      const booking = participant(49977, 1785274500000);
+      requestMock.mockResolvedValue(envelope([booking]));
+
+      const result = await client.eventParticipant(49977);
+
+      expect(result).toEqual(booking);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/eventparticipants/49977?sync_from=0&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('createEventParticipant', () => {
+    it('books a member into an event', async () => {
+      requestMock.mockResolvedValue(
+        envelope({
+          member_id: 12345,
+          event_id: '1125559680-54d4cadf992ff6-77810154',
+          event_participant_id: 50794,
+          message: 'Added member to event',
+        }),
+      );
+
+      const booking = await client.createEventParticipant({
+        event_id: '1125559680-54d4cadf992ff6-77810154',
+        member_id: 12345,
+        send_email: true,
+      });
+
+      expect(booking.event_participant_id).toBe(50794);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'post',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/eventparticipants?api_key=test-api-key&club_secret=test-club-secret',
+          data: {
+            event_id: '1125559680-54d4cadf992ff6-77810154',
+            member_id: 12345,
+            send_email: true,
+          },
+        }),
+      );
+    });
+
+    it('throws VirtuaGymApiError when the class is full', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 430,
+          statusmessage:
+            'Could not make a reservation for the class. Class is full.',
+          result_count: 0,
+          timestamp: 1456505217423,
+        },
+      });
+
+      const error = await client
+        .createEventParticipant({ event_id: 'event-1', member_id: 12345 })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({ statuscode: 430 });
+    });
+  });
+
+  describe('updateEventParticipant', () => {
+    it('marks the ticket as printed', async () => {
+      requestMock.mockResolvedValue(
+        envelope({ message: 'ticket_printed now set to true' }),
+      );
+
+      await client.updateEventParticipant(50797, { ticket_printed: true });
+
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'put',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/eventparticipants?api_key=test-api-key&club_secret=test-club-secret',
+          data: { event_participant_id: 50797, ticket_printed: true },
+        }),
+      );
+    });
+  });
+
+  describe('deleteEventParticipant', () => {
+    it('cancels the booking', async () => {
+      requestMock.mockResolvedValue(
+        envelope({ message: 'Successfully removed' }),
+      );
+
+      await client.deleteEventParticipant(50797);
+
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'delete',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/eventparticipants/50797?api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('throws VirtuaGymApiError when no active participant exists', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 420,
+          statusmessage: 'no active event participant found',
+          result_count: 0,
+          timestamp: 1456505412906,
+        },
+      });
+
+      const error = await client
+        .deleteEventParticipant(999)
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({ statuscode: 420 });
+    });
+  });
+
   const membershipInstance = (instance_id: number) => ({
     instance_id,
     member_id: 77038,

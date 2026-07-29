@@ -6,6 +6,7 @@ export type {
   ClubEventOptions,
   ClubEventsOptions,
   CreateEmployeeData,
+  CreateEventParticipantData,
   CreateMemberData,
   CreateMembershipInstanceData,
   CreateOrUpdateEmployeeData,
@@ -14,6 +15,8 @@ export type {
   EmployeeMutationData,
   EmployeeOptions,
   EmployeesOptions,
+  EventParticipantOptions,
+  EventParticipantsOptions,
   MemberIdentifier,
   MemberMutationData,
   MemberOptions,
@@ -21,6 +24,7 @@ export type {
   MembershipDefinitionsOptions,
   MembershipInstancesOptions,
   UpdateEmployeeData,
+  UpdateEventParticipantData,
   UpdateMemberData,
 } from './virtuagym-client-v1';
 export type { VirtuaGymClientV1Options } from './virtuagym-client-v1-options';

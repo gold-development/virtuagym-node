@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-95.87%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-95.01%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -252,6 +252,39 @@ const event = await client.event('1945791969-54d4caf4db7821-10175268');
 ```
 
 Event `start`/`end` are datetime strings (`"YYYY-MM-DD HH:mm:ss"`) in the **club's timezone**, and `event_id` is a string.
+
+## Event participants (bookings)
+
+```ts
+// Participants of events in a time window (API default: today ± 1 month),
+// or lazily page by page via client.eventParticipants()
+const participants = await client.allEventParticipants({
+  timestampStart: now,           // seconds
+  timestampEnd: now + 7 * 86400, // seconds
+  // or scope to one event: eventId: '1977058374-...'
+  // fillGuestname: true fills user_name for guest bookings
+});
+
+// A single booking
+const booking = await client.eventParticipant(49977);
+
+// Book a member into an event (store the returned event_participant_id!)
+const created = await client.createEventParticipant({
+  event_id: '1125559680-54d4cadf992ff6-77810154',
+  member_id: 12345,
+  send_email: true,
+});
+
+// Mark the ticket as printed (the only attribute the API allows updating)
+await client.updateEventParticipant(created.event_participant_id, {
+  ticket_printed: true,
+});
+
+// Cancel the booking
+await client.deleteEventParticipant(created.event_participant_id);
+```
+
+Booking failures surface as `VirtuaGymApiError` with the API's statuscode: `430` (event not bookable / class full), `432` (not enough credits), `420` (validation).
 
 ## Models
 

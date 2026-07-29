@@ -1,6 +1,14 @@
 // @golddevelopment/virtuagym-node/models
 export { clubEventSchema } from './club-event';
 export type { ClubEvent } from './club-event';
+export {
+  eventParticipantCreatedSchema,
+  eventParticipantSchema,
+} from './event-participant';
+export type {
+  EventParticipant,
+  EventParticipantCreated,
+} from './event-participant';
 export { employeePrivileges, employeeSchema } from './employee';
 export type { Employee, EmployeePrivilege } from './employee';
 export { memberSchema } from './member';
