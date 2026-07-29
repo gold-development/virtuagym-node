@@ -1147,7 +1147,7 @@ export class VirtuaGymClientV1 {
    */
   public async assignWorkout(data: AssignWorkoutData): Promise<void> {
     // Uniquely, the success response carries no result field at all.
-    await this.request(z.unknown(), {
+    await this.request(z.unknown().optional(), {
       method: 'post',
       path: `club/${this.options.clubId}/member/workouts`,
       contentType: 'application/json',
