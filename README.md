@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-94.75%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-94.3%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -311,6 +311,27 @@ created.rows; // InvoiceRow[] — prices include VAT
 ```
 
 The invoices list supports no filters (the API ignores `sync_from` here).
+
+## Member credits
+
+```ts
+// All credit rows of the club (one row per member × service type),
+// or lazily via client.memberCredits(); filter by member
+const credits = await client.allMemberCredits({ memberId: 1234 });
+
+// Assign credits — identify by member_id OR member_email, and give
+// credit_amount OR credit_unlimited (exactly one of each)
+const tx = await client.addMemberCredits({
+  member_email: 'example@example.com',
+  credit_amount: 20,
+  service_type: 'credits',       // normalized: lowercase, spaces → hyphens
+  notes: 'bought online',
+  client_id: crypto.randomUUID(), // idempotency key — replays are deduplicated
+});
+tx.message; // "Transaction completed" | "Already picked up or completed" (replay)
+```
+
+One member and one service type per request. Credit timestamps and `syncFrom` are in **seconds** on this endpoint.
 
 ## Member notes
 

@@ -1,6 +1,6 @@
 {
   "name": "@golddevelopment/virtuagym-node",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "VirtuaGym api for NodeJS",
   "license": "MIT",
   "type": "module",

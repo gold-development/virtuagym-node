@@ -134,6 +134,17 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     expect(uniqueIds.size).toBe(notes.length);
   });
 
+  it('retrieves all member credits across pages without duplicates', async () => {
+    const credits = await client.allMemberCredits();
+
+    expect(credits.length).toBeGreaterThan(0);
+    // Rows have no unique id; identity is (member_id, service_type).
+    const keys = new Set(
+      credits.map((c) => `${c.member_id}|${c.service_type}`),
+    );
+    expect(keys.size).toBe(credits.length);
+  });
+
   it('retrieves club taxes from the live API', async () => {
     const taxes = await client.clubTaxes();
 

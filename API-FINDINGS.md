@@ -157,6 +157,17 @@ live API (July 2026) unless marked "docs-internal inconsistency".
     error-message table omits `checkup` from the allowed note_type list that
     the same page documents.
 
+## Member credits
+
+36. Credits timestamps (`timestamp_created`/`timestamp_edited` and the
+    `sync_from` parameter) are in SECONDS live, while the docs declare
+    `sync_from` "in milliseconds". Rows carry no unique id (identity is the
+    member_id + service_type pair) and include an undocumented
+    `ts_needs_update` field on a few rows. On the positive side, this is an
+    endpoint where the undocumented `next_page` cursor paginates exactly
+    (verified: 929/929 unique across pages), and `member_id` is optional on
+    GET — omitting it lists the whole club, which the docs don't mention.
+
 ## Endpoint shape quirks
 
 23. **Single-resource GETs return one-element arrays**, not objects:

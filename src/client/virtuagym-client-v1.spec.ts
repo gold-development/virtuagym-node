@@ -1161,6 +1161,136 @@ describe('VirtuaGymClientV1', () => {
     });
   });
 
+  const credit = (member_id: number, timestamp_edited: number) => ({
+    club_id: 12345,
+    member_id,
+    service_type: 'access',
+    credit_amount: 20,
+    credit_unlimited: false,
+    timestamp_created: 1456499187,
+    timestamp_edited,
+  });
+
+  describe('memberCredits', () => {
+    it('retrieves credits filtered by member', async () => {
+      const credits = [credit(1234, 1456498507)];
+      requestMock.mockResolvedValue(envelope(credits));
+
+      const result = await client.allMemberCredits({ memberId: 1234 });
+
+      expect(result).toEqual(credits);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/credit?sync_from=0&member_id=1234&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('follows the next_page cursor while results remain', async () => {
+      const page1 = [credit(1, 1456498000)];
+      const page2 = [credit(2, 1456499000)];
+      requestMock
+        .mockResolvedValueOnce({
+          data: {
+            status: {
+              statuscode: 200,
+              statusmessage: 'Everything OK',
+              result_count: 1,
+              timestamp: 1456499193200,
+              results_remaining: 1,
+              next_page: 'sync_from=1456498000',
+            },
+            result: page1,
+          },
+        })
+        .mockResolvedValueOnce(envelope(page2, 0));
+
+      const result = await client.allMemberCredits();
+
+      expect(result).toEqual([...page1, ...page2]);
+      expect(requestMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/credit?sync_from=1456498000&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('addMemberCredits', () => {
+    it('assigns credits by member email with an idempotency guid', async () => {
+      requestMock.mockResolvedValue(
+        envelope({ member_id: 77118, message: 'Transaction completed' }),
+      );
+
+      const result = await client.addMemberCredits({
+        member_email: 'example@example.com',
+        credit_amount: 20,
+        service_type: 'credits',
+        notes: 'Online purchase',
+        client_id: 'fe4a87f4-d770-429a-8de1-69b87eed06c3',
+      });
+
+      expect(result).toEqual({
+        member_id: 77118,
+        message: 'Transaction completed',
+      });
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'put',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/credit?api_key=test-api-key&club_secret=test-club-secret',
+          data: {
+            member_email: 'example@example.com',
+            credit_amount: 20,
+            service_type: 'credits',
+            notes: 'Online purchase',
+            client_id: 'fe4a87f4-d770-429a-8de1-69b87eed06c3',
+          },
+        }),
+      );
+    });
+
+    it('surfaces the idempotent-replay message', async () => {
+      requestMock.mockResolvedValue(
+        envelope({
+          member_id: 77118,
+          message: 'Already picked up or completed',
+        }),
+      );
+
+      const result = await client.addMemberCredits({
+        member_id: 77118,
+        credit_unlimited: true,
+        service_type: 'access',
+        client_id: 'fe4a87f4-d770-429a-8de1-69b87eed06c3',
+      });
+
+      expect(result.message).toBe('Already picked up or completed');
+    });
+
+    it('propagates in-band validation errors', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 420,
+          statusmessage: 'no (active) member found',
+          result_count: 0,
+          timestamp: 1435233686,
+        },
+      });
+
+      const error = await client
+        .addMemberCredits({
+          member_id: 999,
+          credit_amount: 1,
+          service_type: 'access',
+          client_id: 'fe4a87f4-d770-429a-8de1-69b87eed06c3',
+        })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({ statuscode: 420 });
+    });
+  });
+
   describe('clubTaxes', () => {
     it('retrieves club taxes with the undocumented club_tax_id', async () => {
       requestMock.mockResolvedValue(
