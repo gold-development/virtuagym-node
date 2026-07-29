@@ -1,5 +1,12 @@
 import axios, { type AxiosInstance } from 'axios';
 import { z } from 'zod';
+import {
+  bodymetricSchema,
+  bodymetricUpdatedSchema,
+  type Bodymetric,
+  type BodymetricType,
+  type BodymetricUpdated,
+} from '../models/bodymetric';
 import { clubEventSchema, type ClubEvent } from '../models/club-event';
 import { clubTaxSchema, type ClubTax } from '../models/club-tax';
 import {
@@ -1155,6 +1162,79 @@ export class VirtuaGymClientV1 {
     });
   }
 
+  /**
+   * Retrieves the full bodymetric history of a member (the endpoint is not
+   * paginated). Requires the member to have an activated user profile;
+   * otherwise the API reports a 404 "not found in club".
+   */
+  public async bodymetrics(
+    memberId: number,
+    options: BodymetricsOptions = {},
+  ): Promise<Bodymetric[]> {
+    const params = new URLSearchParams();
+    params.set('sync_from', (options.syncFrom ?? 0).toString());
+    params.set('member_id', memberId.toString());
+    if (options.type) {
+      params.set('type', options.type);
+    }
+
+    const { result } = await this.request(z.array(bodymetricSchema), {
+      method: 'get',
+      path: `club/${this.options.clubId}/bodymetrics`,
+      contentType: 'application/json',
+      params,
+    });
+    return result;
+  }
+
+  /**
+   * Retrieves a single bodymetric entry by id. The owning member's id is
+   * required by the API.
+   */
+  public async bodymetric(
+    bodymetricId: number,
+    memberId: number,
+  ): Promise<Bodymetric> {
+    const params = new URLSearchParams();
+    params.set('member_id', memberId.toString());
+
+    const { result } = await this.request(
+      z.union([z.array(bodymetricSchema), bodymetricSchema]),
+      {
+        method: 'get',
+        path: `club/${this.options.clubId}/bodymetrics/${bodymetricId}`,
+        contentType: 'application/json',
+        params,
+      },
+    );
+
+    const bodymetric = Array.isArray(result) ? result[0] : result;
+    if (!bodymetric) {
+      throw new VirtuaGymApiError(
+        420,
+        `Bodymetric ${bodymetricId} was not found in the response`,
+      );
+    }
+    return bodymetric;
+  }
+
+  /**
+   * Records a bodymetric value for a member and returns the id of the new
+   * entry. Units are cast to the member's account settings by Virtuagym.
+   * Types marked int-only by the docs reject float values (400).
+   */
+  public async updateBodymetric(
+    data: UpdateBodymetricData,
+  ): Promise<BodymetricUpdated> {
+    const { result } = await this.request(bodymetricUpdatedSchema, {
+      method: 'put',
+      path: `club/${this.options.clubId}/bodymetrics`,
+      contentType: 'application/json',
+      data,
+    });
+    return result;
+  }
+
   private async mutateMember(
     path: string,
     data: UpdateMemberData,
@@ -1205,17 +1285,32 @@ export class VirtuaGymClientV1 {
     params.set('club_secret', this.options.clubSecret);
     const query = params.toString();
     const url = `https://api.virtuagym.com/api/v1/${config.path}?${query}`;
-    const response = await this.http.request<unknown>({
-      method: config.method,
-      url,
-      data: config.data,
-      headers: {
-        ...(config.contentType ? { 'Content-Type': config.contentType } : {}),
-      },
-    });
+    let response;
+    try {
+      response = await this.http.request<unknown>({
+        method: config.method,
+        url,
+        data: config.data,
+        headers: {
+          ...(config.contentType ? { 'Content-Type': config.contentType } : {}),
+        },
+      });
+    } catch (error) {
+      // Some endpoints (e.g. bodymetrics) report errors with real HTTP
+      // status codes; surface their envelope as VirtuaGymApiError too.
+      if (axios.isAxiosError(error)) {
+        const flat = flatErrorSchema.safeParse(error.response?.data);
+        if (flat.success) {
+          throw new VirtuaGymApiError(
+            flat.data.statuscode,
+            flat.data.statusmessage,
+            flat.data.errors,
+          );
+        }
+      }
+      throw error;
+    }
 
-    // Errors are reported in-band: a flat `{statuscode, statusmessage, ...}`
-    // body (no `result`), delivered with HTTP 200 — axios does not throw.
     // Errors are reported in-band with HTTP 200, in two shapes: flat
     // ({statuscode, ...}) or nested ({status: {...}, errors?}) without a
     // result. Success is any 2xx statuscode (create_or_update returns 201).
@@ -1237,9 +1332,19 @@ export class VirtuaGymClientV1 {
       );
     }
 
-    return z
-      .object({ status: statusSchema, result: resultSchema })
-      .parse(response.data);
+    // Some endpoints (e.g. bodymetrics) return a FLAT success envelope with
+    // the status fields at the top level; normalize it to the nested shape.
+    let body = response.data;
+    if (
+      body !== null &&
+      typeof body === 'object' &&
+      !('status' in body) &&
+      'statuscode' in body
+    ) {
+      body = { status: body, result: (body as { result?: unknown }).result };
+    }
+
+    return z.object({ status: statusSchema, result: resultSchema }).parse(body);
   }
 }
 
@@ -1476,6 +1581,22 @@ export interface AssignWorkoutData {
   readonly weekdays: readonly Weekday[];
   /** The start date of the workout (YYYY-MM-DD). */
   readonly start_date: string;
+}
+
+export interface BodymetricsOptions {
+  /** Only entries edited on/after this timestamp (ms per docs). Defaults to 0. */
+  readonly syncFrom?: number;
+  /** Only entries of this bodymetric type. */
+  readonly type?: BodymetricType;
+}
+
+/** Body for recording a bodymetric. Names match the API's wire format. */
+export interface UpdateBodymetricData {
+  /** Id of the member; must belong to the club and have an activated profile. */
+  readonly member_id: number;
+  readonly type: BodymetricType;
+  /** Types marked int-only by the docs reject float values. */
+  readonly value: number;
 }
 
 export interface MembershipInstancesOptions {

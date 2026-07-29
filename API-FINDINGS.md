@@ -177,6 +177,21 @@ live API (July 2026) unless marked "docs-internal inconsistency".
     members with activated accounts, workouts cannot be assigned via the
     API to members without one.
 
+## Bodymetrics
+
+38. **Bodymetrics uses a FLAT success envelope** (`{statuscode, ..., result}`
+    with no nested `status` object) — the shape the docs show for several
+    endpoints but which only this one actually uses live. Its errors also
+    come with real HTTP status codes (400/404), unlike the
+    in-band-with-HTTP-200 errors of the other resources.
+39. Bodymetric rows are keyed by an undocumented `user_id` (linked account
+    id) rather than `member_id`; live data contains undocumented types
+    beyond the 19 documented (e.g. "sleep_score") plus an undocumented
+    `timestamp_edit`; timestamps are in seconds; and the endpoint returns
+    the full history in one response (no pagination — 873 rows observed in
+    a single result). Members without an activated user profile get a
+    misleading 404 "Member with member_id X not found in club".
+
 ## Endpoint shape quirks
 
 23. **Single-resource GETs return one-element arrays**, not objects:

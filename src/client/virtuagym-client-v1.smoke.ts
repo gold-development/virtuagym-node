@@ -145,6 +145,26 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     expect(keys.size).toBe(credits.length);
   });
 
+  it('retrieves bodymetrics for a member with an activated profile', async () => {
+    const { value: firstPage } = await client.members().next();
+    const candidates = (firstPage ?? []).filter((m) => m.user_id).slice(0, 80);
+    if (candidates.length === 0) {
+      throw new Error('Club has no members with activated profiles');
+    }
+
+    // Some members error despite having a user_id; find one that works.
+    for (const member of candidates) {
+      try {
+        const metrics = await client.bodymetrics(member.member_id);
+        expect(Array.isArray(metrics)).toBe(true);
+        return;
+      } catch {
+        // try the next candidate
+      }
+    }
+    throw new Error('bodymetrics failed for all candidate members');
+  });
+
   it('retrieves club taxes from the live API', async () => {
     const taxes = await client.clubTaxes();
 

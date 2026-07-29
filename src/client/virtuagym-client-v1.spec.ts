@@ -8,7 +8,11 @@ import { VirtuaGymApiError, VirtuaGymClientV1 } from './virtuagym-client-v1';
 const { requestMock } = vi.hoisted(() => ({ requestMock: vi.fn() }));
 
 vi.mock('axios', () => ({
-  default: { create: () => ({ request: requestMock }) },
+  default: {
+    create: () => ({ request: requestMock }),
+    isAxiosError: (error: unknown) =>
+      (error as { isAxiosError?: boolean } | null)?.isAxiosError === true,
+  },
 }));
 
 describe('VirtuaGymClientV1', () => {
@@ -1353,6 +1357,117 @@ describe('VirtuaGymClientV1', () => {
         statuscode: 420,
         statusmessage: 'You cannot assign this workout.',
       });
+    });
+  });
+
+  const bodymetric = (id: number) => ({
+    id,
+    user_id: 9234178,
+    type: 'weight',
+    value: 100,
+    unit: 'kg',
+    timestamp: 1469527200,
+    deleted: 0,
+    timestamp_edit: 1469537863,
+  });
+
+  describe('bodymetrics', () => {
+    it('parses the FLAT success envelope this endpoint uses', async () => {
+      // The bodymetrics endpoint puts the status fields at the top level.
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 200,
+          statusmessage: 'Everything OK',
+          result_count: 1,
+          timestamp: 1469539380,
+          result: [bodymetric(1647964)],
+        },
+      });
+
+      const result = await client.bodymetrics(12345, { type: 'weight' });
+
+      expect(result).toEqual([{ ...bodymetric(1647964), deleted: false }]);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/bodymetrics?sync_from=0&member_id=12345&type=weight&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('converts HTTP-status errors into VirtuaGymApiError', async () => {
+      // Bodymetrics reports errors with real HTTP codes; axios throws.
+      requestMock.mockRejectedValue({
+        isAxiosError: true,
+        response: {
+          status: 404,
+          data: {
+            statuscode: 404,
+            statusmessage: 'Member with member_id 999 not found in club',
+            result_count: 0,
+            timestamp: 1785315593,
+          },
+        },
+      });
+
+      const error = await client.bodymetrics(999).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({
+        statuscode: 404,
+        statusmessage: 'Member with member_id 999 not found in club',
+      });
+    });
+  });
+
+  describe('bodymetric', () => {
+    it('retrieves a single bodymetric, passing the required member_id', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 200,
+          statusmessage: 'Everything OK',
+          result_count: 1,
+          timestamp: 1469539380,
+          result: [bodymetric(1647964)],
+        },
+      });
+
+      const result = await client.bodymetric(1647964, 12345);
+
+      expect(result.id).toBe(1647964);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/bodymetrics/1647964?member_id=12345&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('updateBodymetric', () => {
+    it('records a bodymetric value', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 200,
+          statusmessage: 'Everything OK',
+          result_count: 1,
+          timestamp: 1469539371,
+          result: { id: 1647965 },
+        },
+      });
+
+      const result = await client.updateBodymetric({
+        member_id: 12345,
+        type: 'weight',
+        value: 100,
+      });
+
+      expect(result).toEqual({ id: 1647965 });
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'put',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/bodymetrics?api_key=test-api-key&club_secret=test-club-secret',
+          data: { member_id: 12345, type: 'weight', value: 100 },
+        }),
+      );
     });
   });
 

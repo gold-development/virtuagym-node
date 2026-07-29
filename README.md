@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-94.3%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-94.48%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -311,6 +311,24 @@ created.rows; // InvoiceRow[] — prices include VAT
 ```
 
 The invoices list supports no filters (the API ignores `sync_from` here).
+
+## Bodymetrics
+
+```ts
+// Full history of a member (not paginated); optionally filter by type
+const metrics = await client.bodymetrics(7302399, { type: 'weight' });
+
+const single = await client.bodymetric(1647964, 7302399); // member_id required by the API
+
+// Record a value — units are cast to the member's account settings
+const { id } = await client.updateBodymetric({
+  member_id: 7302399,
+  type: 'weight',
+  value: 82.5,
+});
+```
+
+Requires the member to have an activated user profile. The 19 documented types are typed as `BodymetricType`; responses may additionally contain undocumented types (e.g. `sleep_score`). Rep-based types (`number_crunches`, `number_pushups`, …) accept integers only.
 
 ## Assign workout
 

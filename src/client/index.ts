@@ -10,6 +10,8 @@ export type {
   CreateInvoiceData,
   AddMemberCreditsData,
   AssignWorkoutData,
+  BodymetricsOptions,
+  UpdateBodymetricData,
   Weekday,
   CreateMemberNoteData,
   MemberCreditsOptions,
