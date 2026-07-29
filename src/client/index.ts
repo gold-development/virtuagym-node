@@ -9,6 +9,8 @@ export type {
   CreateEventParticipantData,
   CreateInvoiceData,
   AddMemberCreditsData,
+  AssignWorkoutData,
+  Weekday,
   CreateMemberNoteData,
   MemberCreditsOptions,
   MemberNotesOptions,

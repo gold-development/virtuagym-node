@@ -1137,6 +1137,24 @@ export class VirtuaGymClientV1 {
     return result;
   }
 
+  /**
+   * Assigns a workout to a member's activity calendar.
+   *
+   * Assignable: standard workouts, club workouts, a member's own private
+   * workout, and coach workouts (scope depending on the "coach can coach
+   * all" club option). Failures such as "You cannot assign this workout."
+   * surface as {@link VirtuaGymApiError} (statuscode 420).
+   */
+  public async assignWorkout(data: AssignWorkoutData): Promise<void> {
+    // Uniquely, the success response carries no result field at all.
+    await this.request(z.unknown(), {
+      method: 'post',
+      path: `club/${this.options.clubId}/member/workouts`,
+      contentType: 'application/json',
+      data,
+    });
+  }
+
   private async mutateMember(
     path: string,
     data: UpdateMemberData,
@@ -1440,6 +1458,25 @@ export type AddMemberCreditsData = {
     | { readonly credit_amount: number; readonly credit_unlimited?: never }
     | { readonly credit_unlimited: boolean; readonly credit_amount?: never }
   );
+
+export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** Body for assigning a workout. Names match the API's wire format. */
+export interface AssignWorkoutData {
+  /** The workout id of a valid standard or club workout. */
+  readonly plan_id: number;
+  /**
+   * The USER id (not member_id) of an active member — the user_id field on
+   * the Member model, present only for members with an activated account.
+   */
+  readonly user_id: number;
+  /** Number of weeks (positive). */
+  readonly weeks: number;
+  /** Weekdays the workout occurs on: Monday = 1 .. Sunday = 7. */
+  readonly weekdays: readonly Weekday[];
+  /** The start date of the workout (YYYY-MM-DD). */
+  readonly start_date: string;
+}
 
 export interface MembershipInstancesOptions {
   /** Only instances edited on/after this timestamp (ms). Defaults to 0. */

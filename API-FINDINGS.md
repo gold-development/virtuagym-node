@@ -168,6 +168,15 @@ live API (July 2026) unless marked "docs-internal inconsistency".
     (verified: 929/929 unique across pages), and `member_id` is optional on
     GET — omitting it lists the whole club, which the docs don't mention.
 
+## Assign workout
+
+37. The workout-assignment success response contains no `result` field at
+    all — `{status: {...}}` only — unlike every other endpoint. The body
+    field is `user_id` (the linked user account id) where the rest of the
+    member endpoints key on `member_id`; since `user_id` is only present on
+    members with activated accounts, workouts cannot be assigned via the
+    API to members without one.
+
 ## Endpoint shape quirks
 
 23. **Single-resource GETs return one-element arrays**, not objects:

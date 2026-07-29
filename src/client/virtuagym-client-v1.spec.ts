@@ -1291,6 +1291,71 @@ describe('VirtuaGymClientV1', () => {
     });
   });
 
+  describe('assignWorkout', () => {
+    it('assigns a workout, accepting the result-less success envelope', async () => {
+      // Uniquely, this endpoint's success response has no result field.
+      requestMock.mockResolvedValue({
+        data: {
+          status: {
+            statuscode: 200,
+            statusmessage: 'Everything OK',
+            result_count: 0,
+            timestamp: 1478252652810,
+          },
+        },
+      });
+
+      await client.assignWorkout({
+        plan_id: 12345,
+        user_id: 67890,
+        weekdays: [1, 3, 5],
+        weeks: 1,
+        start_date: '2026-08-01',
+      });
+
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'post',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/member/workouts?api_key=test-api-key&club_secret=test-club-secret',
+          data: {
+            plan_id: 12345,
+            user_id: 67890,
+            weekdays: [1, 3, 5],
+            weeks: 1,
+            start_date: '2026-08-01',
+          },
+        }),
+      );
+    });
+
+    it('propagates assignment failures', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 420,
+          statusmessage: 'You cannot assign this workout.',
+          result_count: 0,
+          timestamp: 1583138104,
+        },
+      });
+
+      const error = await client
+        .assignWorkout({
+          plan_id: 12345,
+          user_id: 67890,
+          weekdays: [1],
+          weeks: 1,
+          start_date: '2026-08-01',
+        })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({
+        statuscode: 420,
+        statusmessage: 'You cannot assign this workout.',
+      });
+    });
+  });
+
   describe('clubTaxes', () => {
     it('retrieves club taxes with the undocumented club_tax_id', async () => {
       requestMock.mockResolvedValue(

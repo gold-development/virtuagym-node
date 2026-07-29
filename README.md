@@ -312,6 +312,20 @@ created.rows; // InvoiceRow[] — prices include VAT
 
 The invoices list supports no filters (the API ignores `sync_from` here).
 
+## Assign workout
+
+```ts
+await client.assignWorkout({
+  plan_id: 12345,
+  user_id: member.user_id!, // the USER id, not member_id — only members with activated accounts have one
+  weekdays: [1, 3, 5],      // Monday = 1 .. Sunday = 7
+  weeks: 4,
+  start_date: '2026-08-01',
+});
+```
+
+Assignable: standard workouts, club workouts, a member's own private workout, and coach workouts. Failures (e.g. "You cannot assign this workout.") throw `VirtuaGymApiError`.
+
 ## Member credits
 
 ```ts
