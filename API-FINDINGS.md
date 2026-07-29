@@ -126,6 +126,19 @@ live API (July 2026) unless marked "docs-internal inconsistency".
     child table is described as "the total price of the invoice without the
     VAT" (copy-paste of the price_ex_vat description).
 
+## Club taxes
+
+32. **The Club Taxes page is mislabeled "Income Categories"** — title,
+    intro, and the structure heading all say income categories, but the
+    endpoint is `/club-taxes/` and the fields are tax fields. Its `tax_id`
+    is declared int in the table, "the guid" in its own description, and is
+    a GUID string live; the example again uses a `results` key (live:
+    `result`) and contains invalid JSON (trailing comma).
+33. Club taxes return an undocumented numeric `club_tax_id` — which appears
+    to be the id actually referenced by invoice rows (`club_tax_id`) and
+    membership-instance creation (`tax_id`), making the undocumented field
+    the useful one.
+
 ## Endpoint shape quirks
 
 23. **Single-resource GETs return one-element arrays**, not objects:

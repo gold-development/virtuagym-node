@@ -116,6 +116,16 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     expect(single.club_id).toBe(Number(process.env['VIRTUAGYM_CLUB_ID']));
   });
 
+  it('retrieves club taxes from the live API', async () => {
+    const taxes = await client.clubTaxes();
+
+    expect(taxes.length).toBeGreaterThan(0);
+    for (const tax of taxes) {
+      expect(typeof tax.tax_id).toBe('string');
+      expect(typeof tax.tax_perc).toBe('string');
+    }
+  });
+
   it('retrieves income categories from the live API', async () => {
     const categories = await client.incomeCategories();
 

@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-95.12%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-95.17%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -311,6 +311,15 @@ created.rows; // InvoiceRow[] — prices include VAT
 ```
 
 The invoices list supports no filters (the API ignores `sync_from` here).
+
+## Club taxes
+
+```ts
+const taxes = await client.clubTaxes();
+// [{ club_tax_id: 1, tax_id: '98a782…', tax_name: 'BTW 21%', tax_perc: '21.00', date_from: '1970-01-01' }]
+```
+
+The numeric `club_tax_id` (undocumented by the API) is the id you pass as `tax_id` when creating invoices and membership instances.
 
 ## Income categories
 

@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance } from 'axios';
 import { z } from 'zod';
 import { clubEventSchema, type ClubEvent } from '../models/club-event';
+import { clubTaxSchema, type ClubTax } from '../models/club-tax';
 import {
   employeeSchema,
   type Employee,
@@ -733,6 +734,21 @@ export class VirtuaGymClientV1 {
       path: `club/${this.options.clubId}/eventparticipants/${eventParticipantId}`,
       contentType: 'application/json',
     });
+  }
+
+  /**
+   * Retrieves all club taxes of the club. The endpoint is not paginated.
+   *
+   * The undocumented club_tax_id is the numeric id referenced by invoice
+   * rows and membership-instance creation.
+   */
+  public async clubTaxes(): Promise<ClubTax[]> {
+    const { result } = await this.request(z.array(clubTaxSchema), {
+      method: 'get',
+      path: `club/${this.options.clubId}/club-taxes`,
+      contentType: 'application/json',
+    });
+    return result;
   }
 
   /**

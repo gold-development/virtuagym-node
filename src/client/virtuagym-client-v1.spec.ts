@@ -885,6 +885,39 @@ describe('VirtuaGymClientV1', () => {
     });
   });
 
+  describe('clubTaxes', () => {
+    it('retrieves club taxes with the undocumented club_tax_id', async () => {
+      requestMock.mockResolvedValue(
+        envelope([
+          {
+            club_tax_id: 1,
+            tax_id: '98a782c412fec19b8eac118faf05a015d8b6',
+            tax_name: 'BTW 21%',
+            tax_perc: '21.00',
+            date_from: '1970-01-01',
+          },
+        ]),
+      );
+
+      const result = await client.clubTaxes();
+
+      expect(result).toEqual([
+        {
+          club_tax_id: 1,
+          tax_id: '98a782c412fec19b8eac118faf05a015d8b6',
+          tax_name: 'BTW 21%',
+          tax_perc: '21.00',
+          date_from: '1970-01-01',
+        },
+      ]);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/club-taxes?api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
   describe('incomeCategories', () => {
     it('retrieves income categories, tolerating nulls and numeric ids', async () => {
       requestMock.mockResolvedValue(
