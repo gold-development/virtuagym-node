@@ -139,6 +139,24 @@ live API (July 2026) unless marked "docs-internal inconsistency".
     membership-instance creation (`tax_id`), making the undocumented field
     the useful one.
 
+## Member notes
+
+34. **The notes endpoint cannot paginate beyond the newest 500 notes.**
+    Results are sorted newest-first and `sync_from` filters *newer-than*, so
+    the `next_page` cursor (`sync_from=<oldest timestamp of the page>`)
+    returns the same newest 500 rows forever. Verified on a club with 831
+    notes: an 11-request walk following `next_page` fetched 5,500 rows with
+    only 500 unique; `page`, `from_id`, `offset`, `limit` and several other
+    parameters are all silently ignored, and `results_remaining: 331` counts
+    rows that no request can retrieve. The only workarounds are filtering by
+    `member_id` (hoping per-member counts stay under 500) or `note_type`.
+35. Notes `sync_from` and `timestamp` are in SECONDS, while most other
+    endpoints use milliseconds for the same names. The DELETE response
+    returns `note_id` as a string ("1277495") where every other note payload
+    uses a number, notes return an undocumented `from_user_id`, and the
+    error-message table omits `checkup` from the allowed note_type list that
+    the same page documents.
+
 ## Endpoint shape quirks
 
 23. **Single-resource GETs return one-element arrays**, not objects:

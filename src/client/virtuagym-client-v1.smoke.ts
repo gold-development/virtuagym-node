@@ -124,6 +124,16 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     expect(Array.isArray(visits)).toBe(true);
   });
 
+  it('retrieves member notes from the live API', async () => {
+    const notes = await client.memberNotes();
+
+    // The endpoint caps at the newest 500 notes (see API-FINDINGS.md).
+    expect(notes.length).toBeGreaterThan(0);
+    expect(notes.length).toBeLessThanOrEqual(500);
+    const uniqueIds = new Set(notes.map((n) => n.note_id));
+    expect(uniqueIds.size).toBe(notes.length);
+  });
+
   it('retrieves club taxes from the live API', async () => {
     const taxes = await client.clubTaxes();
 

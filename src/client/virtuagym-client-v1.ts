@@ -18,6 +18,13 @@ import {
   type IncomeCategory,
 } from '../models/income-category';
 import { invoiceSchema, type Invoice } from '../models/invoice';
+import {
+  memberNoteCreatedSchema,
+  memberNoteSchema,
+  type MemberNote,
+  type MemberNoteCreated,
+  type NoteType,
+} from '../models/member-note';
 import { memberSchema, type Member } from '../models/member';
 import {
   membershipContractSchema,
@@ -944,6 +951,109 @@ export class VirtuaGymClientV1 {
     return result;
   }
 
+  /**
+   * Retrieves member notes matching the query.
+   *
+   * WARNING: this endpoint cannot paginate. The API returns the newest 500
+   * notes and ignores every pagination parameter (verified live), so a club
+   * with more than 500 matching notes cannot retrieve the older ones. To
+   * stay complete, filter by memberId (per-member counts are usually well
+   * under 500) or sync incrementally with syncFrom.
+   */
+  public async memberNotes(
+    options: MemberNotesOptions = {},
+  ): Promise<MemberNote[]> {
+    const params = new URLSearchParams();
+    params.set('sync_from', (options.syncFrom ?? 0).toString());
+    if (options.memberId !== undefined) {
+      params.set('member_id', options.memberId.toString());
+    }
+    if (options.noteType) {
+      params.set('note_type', options.noteType);
+    }
+
+    const { result } = await this.request(z.array(memberNoteSchema), {
+      method: 'get',
+      path: `club/${this.options.clubId}/notes`,
+      contentType: 'application/json',
+      params,
+    });
+    return result;
+  }
+
+  /**
+   * Retrieves a single note by its id.
+   *
+   * Throws {@link VirtuaGymApiError} (statuscode 420) when it does not
+   * exist.
+   */
+  public async memberNote(noteId: number): Promise<MemberNote> {
+    const params = new URLSearchParams();
+    params.set('sync_from', '0');
+
+    const { result } = await this.request(
+      z.union([z.array(memberNoteSchema), memberNoteSchema]),
+      {
+        method: 'get',
+        path: `club/${this.options.clubId}/notes/${noteId}`,
+        contentType: 'application/json',
+        params,
+      },
+    );
+
+    const note = Array.isArray(result) ? result[0] : result;
+    if (!note) {
+      throw new VirtuaGymApiError(
+        420,
+        `Note ${noteId} was not found in the response`,
+      );
+    }
+    return note;
+  }
+
+  /**
+   * Creates a note on a member. Store the returned note_id; it is needed to
+   * update or delete the note.
+   */
+  public async createMemberNote(
+    data: CreateMemberNoteData,
+  ): Promise<MemberNoteCreated> {
+    const { result } = await this.request(memberNoteCreatedSchema, {
+      method: 'post',
+      path: `club/${this.options.clubId}/notes`,
+      contentType: 'application/json',
+      data,
+    });
+    return result;
+  }
+
+  /** Updates a note's text and/or type (at least one must be given). */
+  public async updateMemberNote(
+    noteId: number,
+    data: UpdateMemberNoteData,
+  ): Promise<void> {
+    await this.request(z.unknown(), {
+      method: 'put',
+      path: `club/${this.options.clubId}/notes`,
+      contentType: 'application/json',
+      data: { note_id: noteId, ...data },
+    });
+  }
+
+  /**
+   * Deletes the note.
+   *
+   * Throws {@link VirtuaGymApiError} (statuscode 420) when the note does
+   * not exist in the club.
+   */
+  public async deleteMemberNote(noteId: number): Promise<void> {
+    await this.request(z.unknown(), {
+      method: 'delete',
+      path: `club/${this.options.clubId}/notes/${noteId}`,
+      contentType: 'application/json',
+    });
+  }
+
   private async mutateMember(
     path: string,
     data: UpdateMemberData,
@@ -1177,6 +1287,37 @@ export type CreateVisitData = {
   | { readonly member_id: number; readonly rfid_tag?: never }
   | { readonly rfid_tag: string; readonly member_id?: never }
 );
+
+export interface MemberNotesOptions {
+  /**
+   * Only notes created on/after this timestamp — in SECONDS, unlike the
+   * millisecond sync_from of most other endpoints. Defaults to 0.
+   */
+  readonly syncFrom?: number;
+  /** Only notes of this member. */
+  readonly memberId?: number;
+  /** Only notes of this type. */
+  readonly noteType?: NoteType;
+}
+
+/** Body for creating a member note. Names match the API's wire format. */
+export interface CreateMemberNoteData {
+  /** The member the note is about; must belong to the club. */
+  readonly member_id: number;
+  /**
+   * The member writing the note; must belong to the same club or super
+   * club and have an activated profile.
+   */
+  readonly member_from: number;
+  readonly note_type: NoteType;
+  /** Not more than 16777215 characters. */
+  readonly note_text: string;
+}
+
+/** At least one of note_text / note_type must be given. */
+export type UpdateMemberNoteData =
+  | { readonly note_text: string; readonly note_type?: NoteType }
+  | { readonly note_type: NoteType; readonly note_text?: string };
 
 export interface MembershipInstancesOptions {
   /** Only instances edited on/after this timestamp (ms). Defaults to 0. */

@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-94.7%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-94.75%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -311,6 +311,27 @@ created.rows; // InvoiceRow[] — prices include VAT
 ```
 
 The invoices list supports no filters (the API ignores `sync_from` here).
+
+## Member notes
+
+```ts
+// Notes, optionally filtered — syncFrom is in SECONDS on this endpoint
+const notes = await client.memberNotes({ memberId: 12345, noteType: 'coaching' });
+
+const note = await client.memberNote(1278494);
+
+const created = await client.createMemberNote({
+  member_id: 12345,   // the member the note is about
+  member_from: 321,   // the member writing it (activated profile required)
+  note_type: 'general',
+  note_text: 'remember to stretch',
+});
+
+await client.updateMemberNote(created.note_id, { note_text: 'updated' });
+await client.deleteMemberNote(created.note_id);
+```
+
+⚠️ The list endpoint **cannot paginate**: the API returns the newest 500 matching notes and ignores every pagination parameter (see [API-FINDINGS.md](API-FINDINGS.md#member-notes)). Filter by `memberId` to stay complete. Note types: `general`, `coaching`, `products`, `invoices`, `files`, `checkup`.
 
 ## Visits (check-in / check-out)
 

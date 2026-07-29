@@ -1012,6 +1012,155 @@ describe('VirtuaGymClientV1', () => {
     });
   });
 
+  const note = (note_id: number) => ({
+    note_id,
+    member_id: 12345,
+    from_user_id: 321,
+    from_user_avatar: 'https://example.com/avatar.png',
+    from_user_name: 'Jane Doe',
+    timestamp: 1456931653,
+    note_text: 'remember to stretch',
+    note_type: 'general',
+    deleted: false,
+  });
+
+  describe('memberNotes', () => {
+    it('retrieves notes with member and type filters', async () => {
+      const notes = [note(1278494)];
+      requestMock.mockResolvedValue(envelope(notes));
+
+      const result = await client.memberNotes({
+        memberId: 12345,
+        noteType: 'general',
+        syncFrom: 1456931653,
+      });
+
+      expect(result).toEqual(notes);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/notes?sync_from=1456931653&member_id=12345&note_type=general&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('performs a single request even when results remain (unpaginatable endpoint)', async () => {
+      requestMock.mockResolvedValue(envelope([note(1)], 331));
+
+      const result = await client.memberNotes();
+
+      expect(result).toHaveLength(1);
+      expect(requestMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('memberNote', () => {
+    it('retrieves a single note by id', async () => {
+      const n = note(1278494);
+      requestMock.mockResolvedValue(envelope([n]));
+
+      const result = await client.memberNote(1278494);
+
+      expect(result).toEqual(n);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/notes/1278494?sync_from=0&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('createMemberNote', () => {
+    it('creates a note', async () => {
+      requestMock.mockResolvedValue(
+        envelope({
+          member_id: 12345,
+          note_id: 1277494,
+          note: 'POST note successful',
+        }),
+      );
+
+      const result = await client.createMemberNote({
+        member_id: 12345,
+        member_from: 321,
+        note_type: 'general',
+        note_text: 'remember to stretch',
+      });
+
+      expect(result.note_id).toBe(1277494);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'post',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/notes?api_key=test-api-key&club_secret=test-club-secret',
+          data: {
+            member_id: 12345,
+            member_from: 321,
+            note_type: 'general',
+            note_text: 'remember to stretch',
+          },
+        }),
+      );
+    });
+
+    it('propagates in-band validation errors', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 420,
+          statusmessage: 'member_from does not have an activated profile',
+          result_count: 0,
+          timestamp: 1457519825419,
+        },
+      });
+
+      const error = await client
+        .createMemberNote({
+          member_id: 12345,
+          member_from: 321,
+          note_type: 'general',
+          note_text: 'x',
+        })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({ statuscode: 420 });
+    });
+  });
+
+  describe('updateMemberNote', () => {
+    it('updates the note text', async () => {
+      requestMock.mockResolvedValue(
+        envelope({ note_id: 1277495, note: 'PUT note successful' }),
+      );
+
+      await client.updateMemberNote(1277495, { note_text: 'abcde' });
+
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'put',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/notes?api_key=test-api-key&club_secret=test-club-secret',
+          data: { note_id: 1277495, note_text: 'abcde' },
+        }),
+      );
+    });
+  });
+
+  describe('deleteMemberNote', () => {
+    it('deletes the note', async () => {
+      // The DELETE response returns note_id as a string.
+      requestMock.mockResolvedValue(
+        envelope({ note_id: '1277495', note: 'DELETE note successful' }),
+      );
+
+      await client.deleteMemberNote(1277495);
+
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'delete',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/notes/1277495?api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
   describe('clubTaxes', () => {
     it('retrieves club taxes with the undocumented club_tax_id', async () => {
       requestMock.mockResolvedValue(
