@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-95.07%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-95.12%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -285,6 +285,32 @@ await client.deleteEventParticipant(created.event_participant_id);
 ```
 
 Booking failures surface as `VirtuaGymApiError` with the API's statuscode: `430` (event not bookable / class full), `432` (not enough credits), `420` (validation).
+
+## Invoices
+
+```ts
+// Lazily, page by page (500/page) — clubs can have thousands of invoices
+for await (const page of client.invoices()) {
+  console.log(`received ${page.length} invoices`);
+}
+
+// Or everything at once (allInvoices()), if you really need it
+
+// A single invoice — by GUID (the numeric id is not accepted by the API)
+const invoice = await client.invoice('982cdf0dca599cb31f968c59c8a525a16b84');
+
+// Create an invoice
+const created = await client.createInvoice({
+  member_id: 7302399,
+  payment_method: 'card', // 'cash' | 'card' | 'directdebit_NL' | 'bank_transfer' | 'check' | 'online'
+  rows: [
+    { name: 'Apple', desc: 'This is an apple', price: 1.5, amount: 1, tax_id: 0 },
+  ],
+});
+created.rows; // InvoiceRow[] — prices include VAT
+```
+
+The invoices list supports no filters (the API ignores `sync_from` here).
 
 ## Income categories
 

@@ -106,6 +106,26 @@ live API (July 2026) unless marked "docs-internal inconsistency".
 27. The live income-category records include an undocumented `name_id`
     string field mentioned in neither revision.
 
+## Invoices
+
+28. **The single-invoice GET only resolves by guid.** The docs call the path
+    parameter `invoice_id`, but passing the numeric `id` returns 420; only
+    the guid works. Its result is a bare object, unlike the one-element
+    arrays of other single-resource GETs.
+29. **`next_page` changes type on the invoices list**: a plain page number
+    (`2`) plus an undocumented `total_pages` field, whereas other endpoints
+    return a query-string fragment (`"sync_from=…"`). Pagination is
+    page-based; `sync_from` is accepted but silently ignored.
+30. Undocumented invoice fields returned live: parent `sales_user_id`,
+    `new_payment_method`, `timestamp_status`, `invoice_related_invoice`,
+    `free_invoice_text`; row `sales_user_id`, `new_payment_method`,
+    `start_period`, `end_period` (shown in examples but missing from the
+    child field table), `related_invoice`.
+31. The parent structure table lists the Optional column for `amount_due`
+    and `timestamp` as literally "false" instead of "no" — and `vat` in the
+    child table is described as "the total price of the invoice without the
+    VAT" (copy-paste of the price_ex_vat description).
+
 ## Endpoint shape quirks
 
 23. **Single-resource GETs return one-element arrays**, not objects:

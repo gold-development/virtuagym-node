@@ -16,6 +16,7 @@ import {
   incomeCategorySchema,
   type IncomeCategory,
 } from '../models/income-category';
+import { invoiceSchema, type Invoice } from '../models/invoice';
 import { memberSchema, type Member } from '../models/member';
 import {
   membershipContractSchema,
@@ -747,6 +748,89 @@ export class VirtuaGymClientV1 {
     return result;
   }
 
+  /**
+   * Retrieves every invoice of the club across all pages (500 per page).
+   * Note: large clubs can have many pages; prefer the invoices() iterator
+   * when you don't need everything.
+   */
+  public async allInvoices(): Promise<Invoice[]> {
+    const invoices: Invoice[] = [];
+    for await (const page of this.invoices()) {
+      invoices.push(...page);
+    }
+    return invoices;
+  }
+
+  /**
+   * Yields invoices page by page (500 per page), fetching each page lazily.
+   * The endpoint supports no filters (sync_from is silently ignored).
+   */
+  public async *invoices(): AsyncGenerator<Invoice[], void, undefined> {
+    let page: number | undefined;
+
+    for (;;) {
+      const params = new URLSearchParams();
+      if (page !== undefined) {
+        params.set('page', page.toString());
+      }
+
+      const { result, status } = await this.request(z.array(invoiceSchema), {
+        method: 'get',
+        path: `club/${this.options.clubId}/invoices`,
+        contentType: 'application/json',
+        params,
+      });
+      if (result.length > 0) {
+        yield result;
+      }
+
+      if ((status.results_remaining ?? 0) <= 0 || result.length === 0) {
+        return;
+      }
+      page = (page ?? 1) + 1;
+    }
+  }
+
+  /**
+   * Retrieves a single invoice by its guid.
+   *
+   * Note: despite the docs naming the path parameter invoice_id, the live
+   * API only resolves invoices by guid — a numeric id returns 420.
+   */
+  public async invoice(guid: string): Promise<Invoice> {
+    const { result } = await this.request(
+      z.union([z.array(invoiceSchema), invoiceSchema]),
+      {
+        method: 'get',
+        path: `club/${this.options.clubId}/invoices/${encodeURIComponent(guid)}`,
+        contentType: 'application/json',
+      },
+    );
+
+    const invoice = Array.isArray(result) ? result[0] : result;
+    if (!invoice) {
+      throw new VirtuaGymApiError(
+        420,
+        `Invoice ${guid} was not found in the response`,
+      );
+    }
+    return invoice;
+  }
+
+  /**
+   * Creates an invoice for a member and returns it (including the generated
+   * guid and rows).
+   */
+  public async createInvoice(data: CreateInvoiceData): Promise<Invoice> {
+    const { result } = await this.request(invoiceSchema, {
+      method: 'post',
+      path: `club/${this.options.clubId}/invoices`,
+      contentType: 'application/json',
+      data,
+    });
+    return result;
+  }
+
   private async mutateMember(
     path: string,
     data: UpdateMemberData,
@@ -931,6 +1015,30 @@ export interface CreateEventParticipantData {
 export interface UpdateEventParticipantData {
   /** Currently the only updatable attribute, and therefore required. */
   readonly ticket_printed: boolean;
+}
+
+export type InvoicePaymentMethod =
+  'cash' | 'card' | 'directdebit_NL' | 'bank_transfer' | 'check' | 'online';
+
+export interface CreateInvoiceRowData {
+  /** A literal name of the product. */
+  readonly name: string;
+  readonly desc?: string;
+  /** The price of the product INCLUDING VAT. */
+  readonly price: number;
+  /** The amount of products. */
+  readonly amount: number;
+  /** The id of the club tax (0 for no tax). */
+  readonly tax_id: number;
+}
+
+/** Body for creating an invoice. Names match the API's wire format. */
+export interface CreateInvoiceData {
+  /** Id of the member to whom the invoice is generated. */
+  readonly member_id: number;
+  readonly payment_method?: InvoicePaymentMethod;
+  /** At least 1 invoice row is mandatory. */
+  readonly rows: readonly CreateInvoiceRowData[];
 }
 
 export interface MembershipInstancesOptions {
@@ -1160,16 +1268,18 @@ const statusSchema = z.object({
   timestamp: z.number(),
   // Present on paginated endpoints; absent means there are no further pages.
   results_remaining: z.number().optional(),
-  // Undocumented server-computed cursor for the next page, e.g.
-  // "sync_from=1784035004986". Preferred over deriving a cursor from the
-  // last item, which live testing showed duplicates boundary rows.
-  next_page: z.string().optional(),
+  // Undocumented server-computed cursor for the next page. Query-string form
+  // ("sync_from=1784035004986") on most list endpoints; a plain page number
+  // on the invoices endpoint.
+  next_page: z.union([z.string(), z.number()]).optional(),
+  // Undocumented; returned by the invoices endpoint.
+  total_pages: z.number().optional(),
 });
 
 function parseNextPage(
-  nextPage: string | undefined,
+  nextPage: string | number | undefined,
 ): { syncFrom?: number; fromId?: number } | undefined {
-  if (!nextPage) {
+  if (typeof nextPage !== 'string' || nextPage === '') {
     return undefined;
   }
   const params = new URLSearchParams(nextPage);

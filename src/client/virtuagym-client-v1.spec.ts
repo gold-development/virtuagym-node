@@ -724,6 +724,167 @@ describe('VirtuaGymClientV1', () => {
     });
   });
 
+  const invoice = (guid: string) => ({
+    guid,
+    id: 1081,
+    member_id: 123,
+    club_id: 12345,
+    name: 'Apple, Pear',
+    price: 2.5,
+    price_ex_vat: 2.5,
+    currency: 'EUR',
+    payment_method: 'card',
+    paid: false,
+    amount_due: 2.5,
+    is_concept: false,
+    deleted: false,
+    timestamp: 1465551775,
+    timestamp_edit: 1465551775,
+    timestamp_created: 1465551775,
+    rows: [
+      {
+        guid: `${guid}-row-1`,
+        product_name: 'Apple',
+        product_desc: 'This is an apple',
+        product_count: 1,
+        price: 1.5,
+        price_ex_vat: 1.5,
+        vat: 0,
+        currency: 'EUR',
+        payment_method: 'card',
+        deleted: false,
+        income_category: 'other',
+        position: 1,
+        origin: 'api_created',
+        timestamp: 1465551775,
+        timestamp_edit: 1465551775,
+        timestamp_created: 1465551775,
+        club_tax_id: 0,
+        club_tax_name: 'No tax',
+        club_tax_perc: 0,
+      },
+    ],
+  });
+
+  describe('invoices', () => {
+    it('pages with the page parameter, tolerating the numeric next_page', async () => {
+      requestMock
+        .mockResolvedValueOnce({
+          data: {
+            status: {
+              statuscode: 200,
+              statusmessage: 'Everything OK',
+              result_count: 1,
+              timestamp: 1785313445606,
+              results_remaining: 1,
+              // The invoices endpoint returns next_page as a NUMBER.
+              next_page: 2,
+              total_pages: 2,
+            },
+            result: [invoice('invoice-1')],
+          },
+        })
+        .mockResolvedValueOnce(envelope([invoice('invoice-2')], 0));
+
+      const result = await client.allInvoices();
+
+      expect(result.map((i) => i.guid)).toEqual(['invoice-1', 'invoice-2']);
+      expect(requestMock).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/invoices?api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+      expect(requestMock).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/invoices?page=2&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('invoice', () => {
+    it('retrieves a single invoice by guid (object result)', async () => {
+      const inv = invoice('982cdf0dca599cb31f968c59c8a525a16b84');
+      requestMock.mockResolvedValue(envelope(inv));
+
+      const result = await client.invoice(
+        '982cdf0dca599cb31f968c59c8a525a16b84',
+      );
+
+      expect(result.guid).toBe('982cdf0dca599cb31f968c59c8a525a16b84');
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/invoices/982cdf0dca599cb31f968c59c8a525a16b84?api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('createInvoice', () => {
+    it('creates an invoice and returns it with rows', async () => {
+      requestMock.mockResolvedValue(
+        envelope(invoice('8e65a06c-10d1-4056-8523-f03c58cf3ca4')),
+      );
+
+      const result = await client.createInvoice({
+        member_id: 123,
+        payment_method: 'card',
+        rows: [
+          {
+            name: 'Apple',
+            desc: 'This is an apple',
+            price: 1.5,
+            amount: 1,
+            tax_id: 0,
+          },
+        ],
+      });
+
+      expect(result.guid).toBe('8e65a06c-10d1-4056-8523-f03c58cf3ca4');
+      expect(result.rows).toHaveLength(1);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'post',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/invoices?api_key=test-api-key&club_secret=test-club-secret',
+          data: {
+            member_id: 123,
+            payment_method: 'card',
+            rows: [
+              {
+                name: 'Apple',
+                desc: 'This is an apple',
+                price: 1.5,
+                amount: 1,
+                tax_id: 0,
+              },
+            ],
+          },
+        }),
+      );
+    });
+
+    it('propagates in-band validation errors', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 420,
+          statusmessage:
+            'Parameter rows is empty. At least 1 invoice row is mandatory.',
+          result_count: 0,
+          timestamp: 1465551775882,
+        },
+      });
+
+      const error = await client
+        .createInvoice({ member_id: 123, rows: [] })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({ statuscode: 420 });
+    });
+  });
+
   describe('incomeCategories', () => {
     it('retrieves income categories, tolerating nulls and numeric ids', async () => {
       requestMock.mockResolvedValue(

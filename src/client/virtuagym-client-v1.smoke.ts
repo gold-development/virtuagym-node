@@ -84,6 +84,38 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     }
   });
 
+  it('retrieves invoices page by page without duplicates', async () => {
+    // The club has thousands of invoices; three pages suffice to prove the
+    // pagination boundaries are exact.
+    const guids = new Set<string>();
+    let total = 0;
+    let pages = 0;
+    for await (const page of client.invoices()) {
+      for (const invoice of page) {
+        guids.add(invoice.guid);
+        total += 1;
+      }
+      pages += 1;
+      if (pages >= 3) break;
+    }
+
+    expect(total).toBeGreaterThan(0);
+    expect(guids.size).toBe(total);
+  });
+
+  it('retrieves a single invoice by guid from the live API', async () => {
+    const { value: firstPage } = await client.invoices().next();
+    const first = firstPage?.[0];
+    if (!first) {
+      throw new Error('Club has no invoices to smoke-test against');
+    }
+
+    const single = await client.invoice(first.guid);
+
+    expect(single.guid).toBe(first.guid);
+    expect(single.club_id).toBe(Number(process.env['VIRTUAGYM_CLUB_ID']));
+  });
+
   it('retrieves income categories from the live API', async () => {
     const categories = await client.incomeCategories();
 

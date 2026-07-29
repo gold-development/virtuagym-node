@@ -13,6 +13,8 @@ export { employeePrivileges, employeeSchema } from './employee';
 export type { Employee, EmployeePrivilege } from './employee';
 export { incomeCategorySchema } from './income-category';
 export type { IncomeCategory } from './income-category';
+export { invoiceRowSchema, invoiceSchema } from './invoice';
+export type { Invoice, InvoiceRow } from './invoice';
 export { memberSchema } from './member';
 export type { Member } from './member';
 export {
