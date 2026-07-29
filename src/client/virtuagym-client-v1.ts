@@ -12,6 +12,10 @@ import {
   type EventParticipant,
   type EventParticipantCreated,
 } from '../models/event-participant';
+import {
+  incomeCategorySchema,
+  type IncomeCategory,
+} from '../models/income-category';
 import { memberSchema, type Member } from '../models/member';
 import {
   membershipContractSchema,
@@ -728,6 +732,19 @@ export class VirtuaGymClientV1 {
       path: `club/${this.options.clubId}/eventparticipants/${eventParticipantId}`,
       contentType: 'application/json',
     });
+  }
+
+  /**
+   * Retrieves all income categories of the club. The endpoint is not
+   * paginated.
+   */
+  public async incomeCategories(): Promise<IncomeCategory[]> {
+    const { result } = await this.request(z.array(incomeCategorySchema), {
+      method: 'get',
+      path: `club/${this.options.clubId}/income-categories`,
+      contentType: 'application/json',
+    });
+    return result;
   }
 
   private async mutateMember(

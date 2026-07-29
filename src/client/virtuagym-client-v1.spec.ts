@@ -724,6 +724,47 @@ describe('VirtuaGymClientV1', () => {
     });
   });
 
+  describe('incomeCategories', () => {
+    it('retrieves income categories, tolerating nulls and numeric ids', async () => {
+      requestMock.mockResolvedValue(
+        envelope([
+          {
+            income_category_id: 'a6e7fd822dad5f7e1549c9749cc78a049290',
+            income_category_name: 'Memberships',
+            name_id: 'memberships',
+            default_tax: null,
+            default_tax_id: null,
+          },
+          {
+            // Older docs revision shows numeric ids; coerced to string.
+            income_category_id: 2,
+            income_category_name: 'Personal Training',
+            default_tax: 'BTW 21% (21.00%)',
+            default_tax_id: 1002,
+          },
+        ]),
+      );
+
+      const result = await client.incomeCategories();
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          income_category_id: 'a6e7fd822dad5f7e1549c9749cc78a049290',
+          default_tax: null,
+        }),
+        expect.objectContaining({
+          income_category_id: '2',
+          default_tax_id: 1002,
+        }),
+      ]);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/income-categories?api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
   const participant = (
     event_participant_id: number,
     timestamp_edit: number,

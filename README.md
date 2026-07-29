@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-95.01%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-95.07%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -285,6 +285,16 @@ await client.deleteEventParticipant(created.event_participant_id);
 ```
 
 Booking failures surface as `VirtuaGymApiError` with the API's statuscode: `430` (event not bookable / class full), `432` (not enough credits), `420` (validation).
+
+## Income categories
+
+```ts
+const categories = await client.incomeCategories();
+// [{ income_category_id: '807351…', income_category_name: 'Memberships',
+//    default_tax: null, default_tax_id: null, ... }]
+```
+
+Not paginated; `default_tax`/`default_tax_id` are `null` when no default tax is set.
 
 ## Models
 

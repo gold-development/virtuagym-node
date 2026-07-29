@@ -84,6 +84,16 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     }
   });
 
+  it('retrieves income categories from the live API', async () => {
+    const categories = await client.incomeCategories();
+
+    expect(categories.length).toBeGreaterThan(0);
+    for (const category of categories) {
+      expect(typeof category.income_category_id).toBe('string');
+      expect(typeof category.income_category_name).toBe('string');
+    }
+  });
+
   it('retrieves club events from the live API', async () => {
     const now = Math.floor(Date.now() / 1000);
     const events = await client.allEvents({

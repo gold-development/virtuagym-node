@@ -95,6 +95,17 @@ live API (July 2026) unless marked "docs-internal inconsistency".
     in docs examples but missing from the GET STRUCTURE table. (Also note the
     field name's spelling is `priviliges` on the wire.)
 
+## Income categories
+
+26. **Two contradictory revisions of the Income Categories page exist.** One
+    shows the payload under a `results` key with numeric
+    `income_category_id`s (1..5) — and its example JSON is invalid (trailing
+    comma after `timestamp`); the other shows `result` with GUID-string ids
+    and nullable tax fields. The live API matches the second: `result`,
+    GUID strings, `default_tax`/`default_tax_id` as `null` when unset.
+27. The live income-category records include an undocumented `name_id`
+    string field mentioned in neither revision.
+
 ## Endpoint shape quirks
 
 23. **Single-resource GETs return one-element arrays**, not objects:
