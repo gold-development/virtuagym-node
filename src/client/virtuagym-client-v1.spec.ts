@@ -885,6 +885,133 @@ describe('VirtuaGymClientV1', () => {
     });
   });
 
+  const visit = (id: number, check_in_timestamp: number) => ({
+    id,
+    club_id: 12345,
+    member_id: 77223,
+    check_in_timestamp,
+    check_out_timestamp: 0,
+    status: 'ok',
+    status_message: 'Checked in @ GATE 3',
+  });
+
+  describe('visits', () => {
+    it('retrieves visits filtered by member', async () => {
+      const visits = [visit(580, 1785274500000)];
+      requestMock.mockResolvedValue(envelope(visits));
+
+      const result = await client.allVisits({ memberId: 77223 });
+
+      expect(result).toEqual(visits);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/visits?sync_from=0&member_id=77223&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+
+    it('advances the cursor on check_in_timestamp while results remain', async () => {
+      const page1 = [visit(1, 1785274500000)];
+      const page2 = [visit(2, 1785274510000)];
+      requestMock
+        .mockResolvedValueOnce(envelope(page1, 1))
+        .mockResolvedValueOnce(envelope(page2, 0));
+
+      const result = await client.allVisits();
+
+      expect(result).toEqual([...page1, ...page2]);
+      expect(requestMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/visits?sync_from=1785274500000&api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('visit', () => {
+    it('retrieves a single visit by id', async () => {
+      const v = visit(580, 1785274500000);
+      requestMock.mockResolvedValue(envelope([v]));
+
+      const result = await client.visit(580);
+
+      expect(result).toEqual(v);
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          url: 'https://api.virtuagym.com/api/v1/club/12345/visits/580?api_key=test-api-key&club_secret=test-club-secret',
+        }),
+      );
+    });
+  });
+
+  describe('createVisit', () => {
+    it('registers a check-in by rfid tag', async () => {
+      requestMock.mockResolvedValue(
+        envelope({ id: 794, member_id: 77223, message: 'check in registered' }),
+      );
+
+      const result = await client.createVisit({
+        action: 'check_in',
+        rfid_tag: 'AA-BB-CC',
+        status: 'ok',
+        status_message: 'CHECK-IN @ GATE 10',
+      });
+
+      expect(result).toEqual({
+        id: 794,
+        member_id: 77223,
+        message: 'check in registered',
+      });
+      expect(requestMock).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          method: 'post',
+          url: 'https://api.virtuagym.com/api/v1/club/12345/visits?api_key=test-api-key&club_secret=test-club-secret',
+          data: {
+            action: 'check_in',
+            rfid_tag: 'AA-BB-CC',
+            status: 'ok',
+            status_message: 'CHECK-IN @ GATE 10',
+          },
+        }),
+      );
+    });
+
+    it('registers a check-out by member id', async () => {
+      requestMock.mockResolvedValue(
+        envelope({
+          id: 794,
+          member_id: 77223,
+          message: 'check out registered',
+        }),
+      );
+
+      const result = await client.createVisit({
+        action: 'check_out',
+        member_id: 77223,
+      });
+
+      expect(result.message).toBe('check out registered');
+    });
+
+    it('propagates in-band validation errors', async () => {
+      requestMock.mockResolvedValue({
+        data: {
+          statuscode: 400,
+          statusmessage: 'member_id or rfid_tag must be passed in POST request',
+          result_count: 0,
+          timestamp: 1481281939479,
+        },
+      });
+
+      const error = await client
+        .createVisit({ member_id: 0 })
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(VirtuaGymApiError);
+      expect(error).toMatchObject({ statuscode: 400 });
+    });
+  });
+
   describe('clubTaxes', () => {
     it('retrieves club taxes with the undocumented club_tax_id', async () => {
       requestMock.mockResolvedValue(

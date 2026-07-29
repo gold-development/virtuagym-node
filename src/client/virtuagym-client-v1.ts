@@ -27,6 +27,12 @@ import {
   type MembershipDefinition,
   type MembershipInstance,
 } from '../models/membership';
+import {
+  visitRegisteredSchema,
+  visitSchema,
+  type Visit,
+  type VisitRegistered,
+} from '../models/visit';
 import type { VirtuaGymClientV1Options } from './virtuagym-client-v1-options';
 
 /** An error reported by the Virtuagym API itself (which can arrive with HTTP 200). */
@@ -847,6 +853,97 @@ export class VirtuaGymClientV1 {
     return result;
   }
 
+  /** Retrieves every visit matching the query across all pages. */
+  public async allVisits(options: VisitsOptions = {}): Promise<Visit[]> {
+    const visits: Visit[] = [];
+    for await (const page of this.visits(options)) {
+      visits.push(...page);
+    }
+    return visits;
+  }
+
+  /** Yields visits page by page, fetching each page lazily. */
+  public async *visits(
+    options: VisitsOptions = {},
+  ): AsyncGenerator<Visit[], void, undefined> {
+    let syncFrom = options.syncFrom ?? 0;
+
+    for (;;) {
+      const params = new URLSearchParams();
+      params.set('sync_from', syncFrom.toString());
+      if (options.memberId !== undefined) {
+        params.set('member_id', options.memberId.toString());
+      }
+
+      const { result, status } = await this.request(z.array(visitSchema), {
+        method: 'get',
+        path: `club/${this.options.clubId}/visits`,
+        contentType: 'application/json',
+        params,
+      });
+      if (result.length > 0) {
+        yield result;
+      }
+
+      const last = result[result.length - 1];
+      if ((status.results_remaining ?? 0) <= 0 || !last) {
+        return;
+      }
+      // No documented cursor; prefer the server-computed next_page and
+      // guard against a non-advancing fallback cursor.
+      const next = parseNextPage(status.next_page);
+      if (next?.syncFrom !== undefined) {
+        syncFrom = next.syncFrom;
+      } else if (last.check_in_timestamp > syncFrom) {
+        syncFrom = last.check_in_timestamp;
+      } else {
+        return;
+      }
+    }
+  }
+
+  /**
+   * Retrieves a single visit by its id.
+   *
+   * Throws {@link VirtuaGymApiError} (statuscode 420) when it does not
+   * exist.
+   */
+  public async visit(visitId: number): Promise<Visit> {
+    const { result } = await this.request(
+      z.union([z.array(visitSchema), visitSchema]),
+      {
+        method: 'get',
+        path: `club/${this.options.clubId}/visits/${visitId}`,
+        contentType: 'application/json',
+      },
+    );
+
+    const visit = Array.isArray(result) ? result[0] : result;
+    if (!visit) {
+      throw new VirtuaGymApiError(
+        420,
+        `Visit ${visitId} was not found in the response`,
+      );
+    }
+    return visit;
+  }
+
+  /**
+   * Registers a check-in or check-out for a member, identified by either
+   * member_id or rfid_tag. Timestamps are computed server-side from the
+   * request time. Check-ins never require a prior check-out, but a
+   * check-out must follow a check-in.
+   */
+  public async createVisit(data: CreateVisitData): Promise<VisitRegistered> {
+    const { result } = await this.request(visitRegisteredSchema, {
+      method: 'post',
+      path: `club/${this.options.clubId}/visits`,
+      contentType: 'application/json',
+      data,
+    });
+    return result;
+  }
+
   private async mutateMember(
     path: string,
     data: UpdateMemberData,
@@ -1056,6 +1153,30 @@ export interface CreateInvoiceData {
   /** At least 1 invoice row is mandatory. */
   readonly rows: readonly CreateInvoiceRowData[];
 }
+
+export interface VisitsOptions {
+  /** Only visits on/after this timestamp (ms). Defaults to 0. */
+  readonly syncFrom?: number;
+  /** Only visits of this member. */
+  readonly memberId?: number;
+}
+
+export type VisitStatus = 'ok' | 'warning' | 'rejected';
+
+/**
+ * Body for registering a visit. Exactly one of member_id or rfid_tag must
+ * identify the member. Names match the API's wire format.
+ */
+export type CreateVisitData = {
+  /** The API defaults to 'check_in'. */
+  readonly action?: 'check_in' | 'check_out';
+  readonly status?: VisitStatus;
+  /** Must be < 255 characters. */
+  readonly status_message?: string;
+} & (
+  | { readonly member_id: number; readonly rfid_tag?: never }
+  | { readonly rfid_tag: string; readonly member_id?: never }
+);
 
 export interface MembershipInstancesOptions {
   /** Only instances edited on/after this timestamp (ms). Defaults to 0. */

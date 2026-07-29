@@ -116,6 +116,14 @@ describe('VirtuaGymClientV1 smoke test (live API)', () => {
     expect(single.club_id).toBe(Number(process.env['VIRTUAGYM_CLUB_ID']));
   });
 
+  it('retrieves visits from the live API', async () => {
+    const visits = await client.allVisits();
+
+    // The club may not use Visitor Registration; the value of this test is
+    // that the request succeeds and any returned visit passes the schema.
+    expect(Array.isArray(visits)).toBe(true);
+  });
+
   it('retrieves club taxes from the live API', async () => {
     const taxes = await client.clubTaxes();
 

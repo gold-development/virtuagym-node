@@ -1,7 +1,7 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-95.17%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-94.7%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
 A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
@@ -311,6 +311,30 @@ created.rows; // InvoiceRow[] — prices include VAT
 ```
 
 The invoices list supports no filters (the API ignores `sync_from` here).
+
+## Visits (check-in / check-out)
+
+```ts
+// All visits, or lazily page by page via client.visits(); filter by member
+const visits = await client.allVisits({ memberId: 77223 });
+visits[0].check_out_timestamp; // 0 while the member is still checked in
+
+// A single visit
+const visit = await client.visit(580);
+
+// Register a check-in — identify by member_id OR rfid_tag (exactly one)
+const checkedIn = await client.createVisit({
+  action: 'check_in',
+  rfid_tag: 'AA-BB-CC',
+  status: 'ok',
+  status_message: 'CHECK-IN @ GATE 10',
+});
+
+// Check-out shares the same visit id
+await client.createVisit({ action: 'check_out', rfid_tag: 'AA-BB-CC' });
+```
+
+Timestamps are computed server-side from the request time. A check-out always requires a prior check-in; the reverse is not enforced.
 
 ## Club taxes
 

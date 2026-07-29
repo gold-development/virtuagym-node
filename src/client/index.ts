@@ -26,8 +26,11 @@ export type {
   MembersOptions,
   MembershipDefinitionsOptions,
   MembershipInstancesOptions,
+  CreateVisitData,
   UpdateEmployeeData,
   UpdateEventParticipantData,
   UpdateMemberData,
+  VisitsOptions,
+  VisitStatus,
 } from './virtuagym-client-v1';
 export type { VirtuaGymClientV1Options } from './virtuagym-client-v1-options';

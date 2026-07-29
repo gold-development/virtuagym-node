@@ -1,6 +1,8 @@
 // @golddevelopment/virtuagym-node/models
 export { clubEventSchema } from './club-event';
 export type { ClubEvent } from './club-event';
+export { visitRegisteredSchema, visitSchema } from './visit';
+export type { Visit, VisitRegistered } from './visit';
 export { clubTaxSchema } from './club-tax';
 export type { ClubTax } from './club-tax';
 export {
