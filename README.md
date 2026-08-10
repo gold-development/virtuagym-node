@@ -475,4 +475,4 @@ npm run test:smoke
 
 ## License
 
-MIT
+[MIT](LICENSE)
