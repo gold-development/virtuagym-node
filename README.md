@@ -10,6 +10,7 @@ A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/api-
 - **Works everywhere** — ships both ESM and CommonJS builds; use `import` or `require` from TypeScript or JavaScript.
 - **Tree-shakable** — ESM build with `sideEffects: false` and per-feature entry points, so bundlers only include what you use.
 - **Pagination handled** — iterate lazily page by page, or fetch everything with one call.
+- Sibling packages: [PHP (with Laravel support)](https://github.com/gold-development/virtuagym-php) and [Python (sync + async)](https://github.com/gold-development/virtuagym-python).
 
 ## Installation
 
