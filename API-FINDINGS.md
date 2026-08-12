@@ -292,3 +292,16 @@ OAuth client-credentials authentication, on a club with 194 leads.
     `""` on `/events` but `null` on `/events/bookings`, for the same
     participants. `meeting_link` is likewise sometimes `""`, and `location`
     is `null` (not omitted) when unset.
+54. **Booking a member without the required credit type succeeds as an
+    unpaid booking** instead of failing with reason 105 (`not_credits`):
+    the response reports `booked: true, reason: 2`, `payment_info` comes
+    back `{paid_status: false, amount: 0, credit_type: null}`, and no
+    credits are deducted (verified live with a member holding credits of a
+    different type). Cancelling soft-deletes the booking — it disappears
+    from the default bookings list (visible only with `deleted=true`) and
+    the event's `spots_left` is restored.
+55. **The create-booking response reports club-local times**: `day`,
+    `time_start` and `time_end` are in the club's timezone (an event with
+    `datetime_start` 11:00 UTC books as `"13:00:00"` for a
+    Europe/Amsterdam club), while every other date in the schedule API is
+    a UTC millisecond timestamp.

@@ -289,6 +289,13 @@ export class VirtuaGymClientV3 {
    * Books a member (member_id/original_member_id) or a guest into a
    * schedule event. Inspect the returned booking attempts' reason codes to
    * see whether the booking was accepted.
+   *
+   * NOTE (verified live): a member without the activity's credit type is
+   * still booked — as unpaid (payment_info.paid_status false, amount 0) —
+   * rather than rejected with reason 105; check payment_info if payment
+   * matters. Cancelling soft-deletes the booking (it disappears from the
+   * default bookings list; query with deleted=true to see it) and restores
+   * the event's spots_left.
    */
   public async createBooking(
     eventId: string,

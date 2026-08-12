@@ -18,16 +18,22 @@ export const bookingReasonCodes = {
 
 export type BookingReasonCode = keyof typeof bookingReasonCodes;
 
-/** One booking attempt in the response of creating a booking. */
+/**
+ * One booking attempt in the response of creating a booking.
+ *
+ * day/time_start/time_end are CLUB-LOCAL (verified live: an 11:00 UTC
+ * event books as "13:00:00" for a Europe/Amsterdam club), unlike the UTC
+ * millisecond datetimes used everywhere else in the schedule API.
+ */
 export const bookingAttemptSchema = z.object({
   booked: z.boolean(),
-  /** YYYY-MM-DD. */
+  /** YYYY-MM-DD, club-local. */
   day: z.string().optional(),
   /** See {@link bookingReasonCodes}. */
   reason: z.number().optional(),
-  /** HH:MM:SS. */
+  /** HH:MM:SS, club-local. */
   time_start: z.string().optional(),
-  /** HH:MM:SS. */
+  /** HH:MM:SS, club-local. */
   time_end: z.string().optional(),
   /** Timestamp (ms) when a booking block expires; only when blocked. */
   booking_blocked_until: z.number().optional(),
