@@ -43,3 +43,19 @@ export type {
   VisitStatus,
 } from './virtuagym-client-v1';
 export type { VirtuaGymClientV1Options } from './virtuagym-client-v1-options';
+export { VirtuaGymClientV3, VirtuaGymV3ApiError } from './virtuagym-client-v3';
+export type {
+  BookingGuestData,
+  BookingRuleOverrides,
+  CancelBookingOptions,
+  CreateBookingData,
+  CreateLeadData,
+  EventBookingsOptions,
+  LeadMutationData,
+  LeadsOptions,
+  ScheduleEventsOptions,
+  ScheduleEventType,
+  UpdateBookingData,
+  UpdateLeadData,
+} from './virtuagym-client-v3';
+export type { VirtuaGymClientV3Options } from './virtuagym-client-v3-options';

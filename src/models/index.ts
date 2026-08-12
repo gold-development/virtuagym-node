@@ -53,3 +53,39 @@ export type {
   MembershipDefinition,
   MembershipInstance,
 } from './membership';
+export { leadOwnerSchema, leadSchema, leadStatuses } from './lead';
+export type { Lead, LeadOwner, LeadStatusId } from './lead';
+export {
+  scheduleActivityCategorySchema,
+  scheduleActivitySchema,
+  scheduleActivitySettingsSchema,
+  scheduleEventCostSchema,
+  scheduleEventSchema,
+  scheduleGuestSchema,
+  scheduleLocationSchema,
+  scheduleParticipantSchema,
+  schedulePaymentInfoSchema,
+  scheduleStaffSchema,
+} from './schedule-event';
+export type {
+  ScheduleActivity,
+  ScheduleActivityCategory,
+  ScheduleActivitySettings,
+  ScheduleEvent,
+  ScheduleEventCost,
+  ScheduleGuest,
+  ScheduleLocation,
+  ScheduleParticipant,
+  SchedulePaymentInfo,
+  ScheduleStaff,
+} from './schedule-event';
+export {
+  bookingAttemptSchema,
+  bookingCreatedSchema,
+  bookingReasonCodes,
+} from './schedule-booking';
+export type {
+  BookingAttempt,
+  BookingCreated,
+  BookingReasonCode,
+} from './schedule-booking';

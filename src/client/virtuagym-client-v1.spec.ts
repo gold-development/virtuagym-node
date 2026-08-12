@@ -1218,6 +1218,35 @@ describe('VirtuaGymClientV1', () => {
         }),
       );
     });
+
+    it('drops rows repeated on page-boundary timestamp ties', async () => {
+      // The seconds-resolution sync_from cursor is inclusive, so the last
+      // row of a page can reappear as the first row of the next page.
+      const boundary = credit(2, 1456499000);
+      requestMock
+        .mockResolvedValueOnce({
+          data: {
+            status: {
+              statuscode: 200,
+              statusmessage: 'Everything OK',
+              result_count: 2,
+              timestamp: 1456499193200,
+              results_remaining: 1,
+              next_page: 'sync_from=1456499000',
+            },
+            result: [credit(1, 1456498000), boundary],
+          },
+        })
+        .mockResolvedValueOnce(envelope([boundary, credit(3, 1456499500)], 0));
+
+      const result = await client.allMemberCredits();
+
+      expect(result).toEqual([
+        credit(1, 1456498000),
+        boundary,
+        credit(3, 1456499500),
+      ]);
+    });
   });
 
   describe('addMemberCredits', () => {

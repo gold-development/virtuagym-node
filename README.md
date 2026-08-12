@@ -1,10 +1,10 @@
 # @golddevelopment/virtuagym-node
 
 [![CI](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml/badge.svg)](https://github.com/gold-development/virtuagym-node/actions/workflows/ci.yml)
-![coverage](https://img.shields.io/badge/coverage-94.48%25-brightgreen)
+![coverage](https://img.shields.io/badge/coverage-93.69%25-brightgreen)
 [![npm version](https://img.shields.io/npm/v/%40golddevelopment%2Fvirtuagym-node)](https://www.npmjs.com/package/@golddevelopment/virtuagym-node)
 
-A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/Virtuagym-Public-API/wiki) (v1, api key + club secret).
+A typed Node.js client for the [Virtuagym API](https://github.com/virtuagym/api-documentation) — v1 (api key + club secret) and v3 (OAuth client credentials).
 
 - **TypeScript-first** — full typings, validated at runtime with [zod](https://zod.dev): responses that don't match the documented schema fail loudly instead of corrupting your data.
 - **Works everywhere** — ships both ESM and CommonJS builds; use `import` or `require` from TypeScript or JavaScript.
@@ -429,6 +429,81 @@ const categories = await client.incomeCategories();
 
 Not paginated; `default_tax`/`default_tax_id` are `null` when no default tax is set.
 
+## API v3 (OAuth)
+
+The v3 API is a separate stack behind `gateway.services.virtuagym.com`, authenticated with OAuth client credentials ([register via api@virtuagym.com](https://github.com/virtuagym/api-documentation/blob/master/V3_AUTHENTICATION.md)). `VirtuaGymClientV3` requests and renews access tokens automatically — tokens are club-specific and expire after ~30 minutes.
+
+```ts
+import { VirtuaGymClientV3 } from '@golddevelopment/virtuagym-node/client';
+
+const client = new VirtuaGymClientV3({
+  clientId: process.env.VIRTUAGYM_CLIENT_ID!,
+  clientSecret: process.env.VIRTUAGYM_CLIENT_SECRET!,
+  clubId: 12345,
+});
+```
+
+Which v3 resources you can reach depends on the scopes Virtuagym registered for your OAuth client (visible in the token's `scope` claim). With only the leads scope, the schedule endpoints answer 401 `Token not valid.` even though your credentials are correct.
+
+### Leads
+
+```ts
+// Lazily, page by page
+for await (const page of client.leads()) {
+  console.log(`received ${page.length} leads`);
+}
+
+// Or collect every page into a single array
+const leads = await client.allLeads();
+
+// Single lead (undocumented endpoint, verified live)
+const lead = await client.lead(751563);
+
+// Create — at least one of email / phone / mobile is required
+const created = await client.createLead({
+  firstname: 'Jane',
+  lastname: 'Doe',
+  email: 'jane.doe@example.com',
+  status_id: 1, // New — see leadStatuses in /models
+});
+
+// Update
+await client.updateLead(created.lead_id, { status_id: 12 }); // Closed won
+```
+
+Beware: the live API serializes **every lead field as a string** — ids, flags (`"0"`/`"1"`) and timestamps (seconds, not ms) included. Mutations return only the new lead's id, so the client re-fetches and returns the canonical record.
+
+### Schedule (appointments) — requires the schedule integration scope
+
+```ts
+// Events in a date range (UTC milliseconds), lazily or all at once
+const events = await client.allEvents({
+  dateStart: Date.now(),
+  dateEnd: Date.now() + 7 * 24 * 3600 * 1000,
+  eventType: 'appointment', // optional filter
+});
+
+// A single event
+const event = await client.event(events[0].event_id);
+
+// Bookings (participants + guests per event) in a date range
+const bookings = await client.allEventBookings({
+  dateStart: Date.now(),
+  dateEnd: Date.now() + 7 * 24 * 3600 * 1000,
+  memberId: 42, // optional filter
+});
+
+// Book a member (or original_member_id for superclubs, or a guest)
+const result = await client.createBooking(event.event_id, { member_id: 42 });
+// Inspect result.bookings[i].reason — see bookingReasonCodes in /models
+
+// Update presence
+await client.updateBooking(event.event_id, { member_id: 42, presence: true });
+
+// Cancel, optionally overriding refund / cancellation-window rules
+await client.cancelBooking(event.event_id, { memberId: 42, refund: false });
+```
+
 ## Models
 
 Types and zod schemas are importable separately — handy in a frontend that only needs the shapes:
@@ -459,6 +534,8 @@ Three kinds of errors can surface:
 - **`VirtuaGymApiError`** — the API itself reported an error (e.g. statuscode 420 "Not found"). These arrive with HTTP 200; the client detects and throws them.
 - **`AxiosError`** — transport-level failures (network errors, non-2xx HTTP statuses).
 - **`ZodError`** — the response did not match the documented schema, naming the exact offending field.
+
+The v3 client throws **`VirtuaGymV3ApiError`** instead of `VirtuaGymApiError`: v3 endpoints use real HTTP status codes (`error.httpStatus`), and validation errors carry the offending field names in `error.fields`. On a 401 the client refreshes the token and retries once before throwing.
 
 ## Development
 

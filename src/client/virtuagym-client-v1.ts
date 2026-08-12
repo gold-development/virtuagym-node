@@ -1087,6 +1087,10 @@ export class VirtuaGymClientV1 {
     options: MemberCreditsOptions = {},
   ): AsyncGenerator<MemberCredit[], void, undefined> {
     let syncFrom = options.syncFrom ?? 0;
+    // The seconds-resolution sync_from cursor is inclusive, so rows sharing
+    // the boundary timestamp repeat on the next page. Rows have no unique
+    // id; identity is the member_id + service_type pair.
+    const seen = new Set<string>();
 
     for (;;) {
       const params = new URLSearchParams();
@@ -1104,15 +1108,22 @@ export class VirtuaGymClientV1 {
           params,
         },
       );
-      if (result.length > 0) {
-        yield result;
+      const fresh = result.filter((credit) => {
+        const key = `${credit.member_id}|${credit.service_type}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+      if (fresh.length > 0) {
+        yield fresh;
       }
 
       const last = result[result.length - 1];
       if ((status.results_remaining ?? 0) <= 0 || !last) {
         return;
       }
-      // next_page paginates exactly here (verified live: 929/929 unique).
       const next = parseNextPage(status.next_page);
       if (next?.syncFrom !== undefined && next.syncFrom !== syncFrom) {
         syncFrom = next.syncFrom;

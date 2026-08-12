@@ -1,9 +1,12 @@
-# Virtuagym Public API v1 — documentation discrepancies and undocumented behavior
+# Virtuagym Public API — documentation discrepancies and undocumented behavior
 
 Findings from building and live-testing a typed client
 ([@golddevelopment/virtuagym-node](https://github.com/gold-development/virtuagym-node))
-against all 15 documented v1 resources. Every item below was verified against
-the live API (July 2026) unless it is a docs-internal inconsistency.
+against all 15 documented v1 resources and the v3 leads API. Every item below
+was verified against the live API (v1: July 2026, v3: August 2026) unless it
+is a docs-internal inconsistency.
+
+## Public API v1
 
 ## Pagination
 
@@ -174,10 +177,13 @@ the live API (July 2026) unless it is a docs-internal inconsistency.
     `sync_from` parameter) are in SECONDS live, while the docs declare
     `sync_from` "in milliseconds". Rows carry no unique id (identity is the
     member_id + service_type pair) and include an undocumented
-    `ts_needs_update` field on a few rows. On the positive side, this is an
-    endpoint where the undocumented `next_page` cursor paginates exactly
-    (verified: 929/929 unique across pages), and `member_id` is optional on
-    GET — omitting it lists the whole club, which the docs don't mention.
+    `ts_needs_update` field on a few rows. The undocumented `next_page`
+    cursor initially paginated exactly (verified: 929/929 unique across
+    pages), but as the club's data grew it started duplicating rows on
+    page-boundary timestamp ties (949 rows, 946 unique) — the
+    seconds-resolution cursor is inclusive, like the millisecond cursors of
+    items 1-3. `member_id` is optional on GET — omitting it lists the whole
+    club, which the docs don't mention.
 
 ## Assign workout
 
@@ -210,3 +216,63 @@ against `https://api.virtuagym.com/api/v1` using api_key + club_secret
 authentication on a single club (550 members, 1,073 membership instances, 145
 membership definitions). Items 1–6 come from full pagination walks comparing
 row counts and unique-ID counts.*
+
+## Public API v3
+
+Verified live (August 2026) against `gateway.services.virtuagym.com` with
+OAuth client-credentials authentication, on a club with 194 leads.
+
+### Authentication and scopes
+
+40. **Resource access is scope-gated, and the error is misleading.** The
+    access token's `scope` claim (e.g. `mass-comm leads_<club_id>`) is set
+    when Virtuagym registers the OAuth client. Calling an endpoint outside
+    the granted scopes (e.g. the appointment-schedule API) returns 401
+    `{"message": "Token not valid.", "status": "fail"}` — indistinguishable
+    from an expired token, even though the token is perfectly valid.
+41. The `x-represent-club-id` token-request header documented for the leads
+    API makes no observable difference for a club-registered client: the
+    issued JWT carries the same `clubId` claim and scopes with or without
+    it. (Presumably it matters for multi-club/partner clients.)
+
+### Leads
+
+42. **All lead fields are serialized as strings** — ids (`"751563"`), flags
+    (`"0"`/`"1"` for `deleted`/`inactive`), and timestamps included; only
+    `birthday` was observed as `null`. The create/update parameter table
+    documents integers for `status_id`, `source` and `owner_id`.
+43. **Lead timestamps are in SECONDS** (`timestamp_created`,
+    `timestamp_edited`), as strings, while most v1 endpoints use
+    milliseconds for the same concept.
+44. **Pagination is undocumented but exists**: `page` (25 per page by
+    default) and `limit` both work; the end is a short/empty page. The
+    parameter names the neighbouring schedule API documents (`page_size`)
+    plus `offset` and `sync_from` are all silently ignored — a `page_size`
+    user gets the newest 25 rows forever without noticing.
+45. **A single-lead GET endpoint exists** (`/v3/clubs/<id>/leads/<lead_id>`,
+    undocumented), wrapping the record as `data: {name: "Lead Detail",
+    lead: {...}}`. A wrong id yields HTTP 404 with a *doubly nested* error
+    envelope: `{"status": "fail", "error": {"status": "error", "message":
+    "ERROR: Lead not found"}}` (note `status` appearing twice with
+    different values).
+46. The leads list response contains undocumented `has_leads` (boolean) and
+    `owners` (map of owner_id → `{member_id, firstname, lastname}`) fields
+    next to `leads`. **`owners` changes type when empty**: it is a JSON
+    object when a page has lead owners and an empty JSON *array* when not
+    (PHP empty-associative-array serialization).
+47. Undocumented lead fields returned live: `lead_guid`, `source_id` (the
+    create parameter is named `source`), `picture`,
+    `converted_to_member_id`, `created_by_user_id`, `edited_by_user_id`,
+    `inactive`, `timestamp_created`, `timestamp_edited`.
+48. **Create and update responses disagree on the id type**: create returns
+    the new id as a string (`"id": "1234"`), update as a number
+    (`"id": 2274`) — visible in the docs' own examples and confirmed live.
+49. The documented parameter table says `status_id` is mandatory for
+    creation, yet also documents a default of `1` (New); omitting it works.
+
+### Appointment schedule
+
+50. The Swagger specs' paths (`/private/v3/clubs/...`) are the real gateway
+    routes — unlike the leads API there is no `/v3/...` alias (that path
+    404s with a Kong "no Route matched" error), and despite the `/private/`
+    prefix this is the public integration API.
