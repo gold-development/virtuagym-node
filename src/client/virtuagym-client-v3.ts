@@ -42,8 +42,9 @@ export class VirtuaGymV3ApiError extends Error {
  *
  * Access tokens are requested and renewed automatically. Which resources
  * are available depends on the scopes Virtuagym registered for the OAuth
- * client: the schedule endpoints require the schedule integration scope and
- * answer 401 "Token not valid." without it, even with valid credentials.
+ * client: the schedule endpoints require the schedule integration scope
+ * (schedule_public_api_club_<club_id>) and answer 401 "Token not valid."
+ * without it, even with valid credentials.
  */
 export class VirtuaGymClientV3 {
   private readonly http: AxiosInstance;
@@ -200,6 +201,10 @@ export class VirtuaGymClientV3 {
 
   /**
    * Retrieves a single schedule event by its event_id.
+   *
+   * Note: occurrences of a recurring event share the event_id (verified
+   * live); this endpoint takes no date parameter, so for recurring events
+   * it returns one occurrence of the API's choosing.
    *
    * Throws {@link VirtuaGymV3ApiError} (httpStatus 404) when the event does
    * not exist.

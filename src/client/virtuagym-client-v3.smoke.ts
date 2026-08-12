@@ -58,8 +58,54 @@ describe('VirtuaGymClientV3 smoke test (live API)', () => {
     expect(single.lead_guid).toBe(first.lead_guid);
   });
 
-  // The schedule endpoints require the schedule integration scope on the
-  // OAuth client, which our test credentials do not have (the JWT scope is
-  // "mass-comm leads_<club>"); without it the API answers 401 "Token not
-  // valid." — so there is no schedule smoke test yet.
+  // The schedule tests require the schedule integration scope
+  // (schedule_public_api_club_<club_id>) on the OAuth client.
+  const week = 7 * 24 * 3600 * 1000;
+  const dateStart = Date.now() - week;
+  const dateEnd = Date.now() + week;
+
+  it('retrieves schedule events across pages without duplicates', async () => {
+    const events = await client.allEvents({ dateStart, dateEnd });
+
+    expect(events.length).toBeGreaterThan(0);
+    // event_id repeats for occurrences of recurring events; the occurrence
+    // (event_id + start time) must be unique.
+    const keys = new Set(
+      events.map((e) => `${e.event_id}|${e.datetime_start}`),
+    );
+    expect(keys.size).toBe(events.length);
+    for (const event of events) {
+      expect(event).toMatchObject({
+        event_id: expect.any(String),
+        datetime_start: expect.any(Number),
+        datetime_end: expect.any(Number),
+      });
+    }
+  });
+
+  it('retrieves a single schedule event', async () => {
+    const { value: firstPage } = await client
+      .events({ dateStart, dateEnd })
+      .next();
+    const first = firstPage?.[0];
+    if (!first) {
+      throw new Error('Club has no schedule events to smoke-test against');
+    }
+
+    const single = await client.event(first.event_id);
+
+    expect(single.event_id).toBe(first.event_id);
+  });
+
+  it('retrieves event bookings in a date range', async () => {
+    const events = await client.allEventBookings({ dateStart, dateEnd });
+
+    // A 204 (no bookings) yields an empty array; both are valid.
+    for (const event of events) {
+      expect(event.event_id).toEqual(expect.any(String));
+      for (const participant of event.participants ?? []) {
+        expect(participant.member_id).toEqual(expect.any(Number));
+      }
+    }
+  });
 });

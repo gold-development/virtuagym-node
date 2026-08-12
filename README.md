@@ -473,7 +473,7 @@ await client.updateLead(created.lead_id, { status_id: 12 }); // Closed won
 
 Beware: the live API serializes **every lead field as a string** — ids, flags (`"0"`/`"1"`) and timestamps (seconds, not ms) included. Mutations return only the new lead's id, so the client re-fetches and returns the canonical record.
 
-### Schedule (appointments) — requires the schedule integration scope
+### Schedule (appointments) — requires the `schedule_public_api_club_<club_id>` scope
 
 ```ts
 // Events in a date range (UTC milliseconds), lazily or all at once

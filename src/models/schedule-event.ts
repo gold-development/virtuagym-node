@@ -1,15 +1,22 @@
 import { z } from 'zod';
 
-// The v3 schedule (appointment) API is documented only by Swagger specs and
-// could not be verified live yet (requires the schedule integration scope on
-// the OAuth client), so these schemas keep every non-identifying field
-// optional and tolerate nulls.
+// The v3 schedule (appointment) API is documented only by Swagger specs;
+// the GET endpoints were verified live (August 2026). Non-identifying
+// fields stay optional and tolerate nulls, as the two specs and the live
+// API disagree on details (e.g. null vs 0 vs "" for absent values).
 
-/** Payment info of a participant's booking. */
+/**
+ * Payment info of a participant's booking. The datetime_* fields are
+ * undocumented and, uniquely for this API, RFC-1123 date strings (e.g.
+ * "Wed, 27 Mar 2024 17:10:08 GMT") rather than timestamps.
+ */
 export const schedulePaymentInfoSchema = z.object({
   paid_status: z.boolean().nullable().optional(),
   amount: z.number().nullable().optional(),
   credit_type: z.string().nullable().optional(),
+  datetime_paid: z.string().nullable().optional(),
+  datetime_update: z.string().nullable().optional(),
+  datetime_created: z.string().nullable().optional(),
 });
 
 export type SchedulePaymentInfo = Readonly<
@@ -136,7 +143,10 @@ export type ScheduleLocation = Readonly<z.infer<typeof scheduleLocationSchema>>;
  * populated.
  */
 export const scheduleEventSchema = z.object({
-  /** E.g. "1945791969-54d4caf4db7821-10175268". */
+  /**
+   * NOT unique per row (verified live): occurrences of a recurring event
+   * share the event_id and differ only in datetime_start/datetime_end.
+   */
   event_id: z.string(),
   /** UTC milliseconds. */
   datetime_start: z.number(),

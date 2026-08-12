@@ -275,4 +275,20 @@ OAuth client-credentials authentication, on a club with 194 leads.
 50. The Swagger specs' paths (`/private/v3/clubs/...`) are the real gateway
     routes — unlike the leads API there is no `/v3/...` alias (that path
     404s with a Kong "no Route matched" error), and despite the `/private/`
-    prefix this is the public integration API.
+    prefix this is the public integration API. The required scope is named
+    `schedule_public_api_club_<club_id>`.
+51. **`event_id` is not unique per row.** Occurrences of a recurring event
+    share the event_id and differ only in `datetime_start`/`datetime_end`
+    (verified in both the events and bookings lists). The single-event GET
+    takes no date parameter, so for recurring events it returns one
+    occurrence of the API's choosing.
+52. **`payment_info` contains undocumented `datetime_paid`,
+    `datetime_update`, `datetime_created` fields — as RFC-1123 date
+    strings** ("Wed, 27 Mar 2024 17:10:08 GMT"), the only place in either
+    API generation that doesn't use numeric timestamps.
+53. **The events and bookings endpoints disagree on how absent participant
+    values are encoded**: `original_member_id` is `null` on
+    `/events` but `0` on `/events/bookings`; `phone_number` and `email` are
+    `""` on `/events` but `null` on `/events/bookings`, for the same
+    participants. `meeting_link` is likewise sometimes `""`, and `location`
+    is `null` (not omitted) when unset.
