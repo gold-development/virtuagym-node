@@ -1,0 +1,75 @@
+name: Weekly API validation
+
+# Validates the live Virtuagym API against all three clients (Node, PHP,
+# Python) using their read-only smoke suites. A failure means Virtuagym
+# changed live behavior (see API-FINDINGS.md for the history of that
+# happening) — GitHub emails the workflow author when a scheduled run fails.
+on:
+  schedule:
+    # Mondays 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci
+      - name: Write credentials
+        run: |
+          cat > .env <<EOF
+          VIRTUAGYM_API_KEY=${{ secrets.VIRTUAGYM_API_KEY }}
+          VIRTUAGYM_CLUB_ID=${{ secrets.VIRTUAGYM_CLUB_ID }}
+          VIRTUAGYM_CLUB_SECRET=${{ secrets.VIRTUAGYM_CLUB_SECRET }}
+          VIRTUAGYM_CLIENT_ID=${{ secrets.VIRTUAGYM_CLIENT_ID }}
+          VIRTUAGYM_CLIENT_SECRET=${{ secrets.VIRTUAGYM_CLIENT_SECRET }}
+          EOF
+      - run: npm run test:smoke
+
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: gold-development/virtuagym-php
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - run: composer install --no-interaction
+      - name: Write credentials
+        run: |
+          cat > .env <<EOF
+          VIRTUAGYM_API_KEY=${{ secrets.VIRTUAGYM_API_KEY }}
+          VIRTUAGYM_CLUB_ID=${{ secrets.VIRTUAGYM_CLUB_ID }}
+          VIRTUAGYM_CLUB_SECRET=${{ secrets.VIRTUAGYM_CLUB_SECRET }}
+          VIRTUAGYM_CLIENT_ID=${{ secrets.VIRTUAGYM_CLIENT_ID }}
+          VIRTUAGYM_CLIENT_SECRET=${{ secrets.VIRTUAGYM_CLIENT_SECRET }}
+          EOF
+      - run: vendor/bin/pest --group=smoke
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: gold-development/virtuagym-python
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install -e .[dev]
+      - name: Write credentials
+        run: |
+          cat > .env <<EOF
+          VIRTUAGYM_API_KEY=${{ secrets.VIRTUAGYM_API_KEY }}
+          VIRTUAGYM_CLUB_ID=${{ secrets.VIRTUAGYM_CLUB_ID }}
+          VIRTUAGYM_CLUB_SECRET=${{ secrets.VIRTUAGYM_CLUB_SECRET }}
+          VIRTUAGYM_CLIENT_ID=${{ secrets.VIRTUAGYM_CLIENT_ID }}
+          VIRTUAGYM_CLIENT_SECRET=${{ secrets.VIRTUAGYM_CLIENT_SECRET }}
+          EOF
+      - run: pytest -m smoke
