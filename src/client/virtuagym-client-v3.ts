@@ -164,11 +164,16 @@ export class VirtuaGymClientV3 {
    *
    * Requires the schedule integration scope on the OAuth client; without it
    * the API answers 401 "Token not valid.".
+   *
+   * The API's sort is unstable on datetime_start ties, so pages can overlap
+   * at the boundary (verified live 2026-08-20); repeated occurrences
+   * (event_id + datetime_start) are dropped.
    */
   public async *events(
     options: ScheduleEventsOptions,
   ): AsyncGenerator<ScheduleEvent[], void, undefined> {
     const pageSize = options.pageSize ?? 100;
+    const seen = new Set<string>();
 
     for (let page = 1; ; page++) {
       const params = new URLSearchParams();
@@ -189,8 +194,9 @@ export class VirtuaGymClientV3 {
         params,
       });
       const events = envelope?.data.events ?? [];
-      if (events.length > 0) {
-        yield events;
+      const fresh = dedupeOccurrences(events, seen);
+      if (fresh.length > 0) {
+        yield fresh;
       }
       const totalPages = envelope?.data.total_pages;
       if (events.length === 0 || page >= (totalPages ?? page)) {
@@ -239,13 +245,15 @@ export class VirtuaGymClientV3 {
   /**
    * Yields events with their bookings (participants and guests) page by
    * page, fetching each page lazily. The API answers 204 when nothing
-   * matches, which ends the iteration.
+   * matches, which ends the iteration. Occurrences repeated on page
+   * boundaries (unstable sort on datetime_start ties) are dropped.
    */
   public async *eventBookings(
     options: EventBookingsOptions,
   ): AsyncGenerator<ScheduleEvent[], void, undefined> {
     // The bookings endpoint documents a page_size maximum of 100.
     const pageSize = options.pageSize ?? 100;
+    const seen = new Set<string>();
 
     for (let page = 1; ; page++) {
       const params = new URLSearchParams();
@@ -275,8 +283,9 @@ export class VirtuaGymClientV3 {
         params,
       });
       const events = envelope?.data.events ?? [];
-      if (events.length > 0) {
-        yield events;
+      const fresh = dedupeOccurrences(events, seen);
+      if (fresh.length > 0) {
+        yield fresh;
       }
       const totalPages = envelope?.data.total_pages;
       if (events.length === 0 || page >= (totalPages ?? page)) {
@@ -475,6 +484,26 @@ export class VirtuaGymClientV3 {
     }
     return bodySchema.parse(response.data);
   }
+}
+
+/**
+ * Drops schedule-event occurrences already seen in a previous page. The
+ * API's sort is unstable on datetime_start ties, so page-based pagination
+ * can repeat the boundary row (verified live 2026-08-20; the same walk was
+ * exact on 2026-08-12).
+ */
+function dedupeOccurrences(
+  events: readonly ScheduleEvent[],
+  seen: Set<string>,
+): ScheduleEvent[] {
+  return events.filter((event) => {
+    const key = `${event.event_id}|${event.datetime_start}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 /** Extracts the message from the three error shapes the v3 stack uses. */

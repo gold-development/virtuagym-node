@@ -426,6 +426,36 @@ describe('VirtuaGymClientV3', () => {
       expect(requestMock).toHaveBeenCalledTimes(3);
     });
 
+    it('drops occurrences repeated on page boundaries', async () => {
+      // The API's sort is unstable on datetime_start ties, so the last row
+      // of a page can reappear as the first row of the next page.
+      const boundary = event('e-boundary');
+      requestMock
+        .mockResolvedValueOnce(tokenResponse())
+        .mockResolvedValueOnce(eventsEnvelope([event('e-1'), boundary], 2))
+        .mockResolvedValueOnce(eventsEnvelope([boundary, event('e-2')], 2));
+
+      const result = await client.allEvents({ dateStart: 1, dateEnd: 2 });
+
+      expect(result.map((e) => e.event_id)).toEqual([
+        'e-1',
+        'e-boundary',
+        'e-2',
+      ]);
+    });
+
+    it('keeps different occurrences of the same recurring event_id', async () => {
+      const occurrence1 = { ...event('e-recurring'), datetime_start: 100 };
+      const occurrence2 = { ...event('e-recurring'), datetime_start: 200 };
+      requestMock
+        .mockResolvedValueOnce(tokenResponse())
+        .mockResolvedValueOnce(eventsEnvelope([occurrence1, occurrence2], 1));
+
+      const result = await client.allEvents({ dateStart: 1, dateEnd: 2 });
+
+      expect(result).toHaveLength(2);
+    });
+
     it('retrieves a single event', async () => {
       requestMock.mockResolvedValueOnce(tokenResponse()).mockResolvedValueOnce({
         status: 200,

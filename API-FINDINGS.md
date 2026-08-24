@@ -305,3 +305,15 @@ OAuth client-credentials authentication, on a club with 194 leads.
     `datetime_start` 11:00 UTC books as `"13:00:00"` for a
     Europe/Amsterdam club), while every other date in the schedule API is
     a UTC millisecond timestamp.
+56. **The events list pagination overlaps at page boundaries** (regression
+    observed 2026-08-20; the same walk was exact on 2026-08-12): the sort
+    is unstable on `datetime_start` ties, so with page-based pagination the
+    last row of one page can repeat as the first row of the next (verified:
+    286 rows fetched / 285 unique, at page_size 100 AND 50 — one overlap
+    each, at different boundaries, both walks covering the same unique
+    set). The same mechanism can equally SKIP a row on a different tie
+    layout, which clients cannot detect or repair; a stable tie-breaker
+    (e.g. event_id) server-side would fix both.
+57. **A page_size above the maximum silently returns an empty events
+    list** (`page_size=300` → HTTP 200 with zero events and no error) —
+    indistinguishable from an empty schedule.
