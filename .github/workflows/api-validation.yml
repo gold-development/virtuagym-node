@@ -72,4 +72,5 @@ jobs:
           VIRTUAGYM_CLIENT_ID=${{ secrets.VIRTUAGYM_CLIENT_ID }}
           VIRTUAGYM_CLIENT_SECRET=${{ secrets.VIRTUAGYM_CLIENT_SECRET }}
           EOF
-      - run: pytest -m smoke
+      # --reruns 1 absorbs transient gateway resets; real drift fails twice.
+      - run: pytest -m smoke --reruns 1
