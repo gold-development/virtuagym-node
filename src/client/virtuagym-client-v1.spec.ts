@@ -127,6 +127,16 @@ describe('VirtuaGymClientV1', () => {
       );
     });
 
+    it('collapses an employee edited mid-walk into its latest copy', async () => {
+      requestMock
+        .mockResolvedValueOnce(envelope([employee(1, 1785274500000)], 1))
+        .mockResolvedValueOnce(envelope([employee(1, 1785274520000)], 0));
+
+      const result = await client.allEmployees();
+
+      expect(result).toEqual([employee(1, 1785274520000)]);
+    });
+
     it('propagates request failures', async () => {
       requestMock.mockRejectedValue(
         new Error('Request failed with status code 401'),
@@ -485,6 +495,25 @@ describe('VirtuaGymClientV1', () => {
       const [result] = await client.allMembers();
 
       expect(result?.member_since).toBe('2015-01-14');
+    });
+
+    it('collapses a member edited mid-walk into its latest copy', async () => {
+      // Member 1 is edited between pages, moves past the cursor and comes back.
+      requestMock
+        .mockResolvedValueOnce(
+          envelope([member(1, 1785274500000), member(2, 1785274510000)], 2),
+        )
+        .mockResolvedValueOnce(
+          envelope([member(3, 1785274520000), member(1, 1785274530000)], 0),
+        );
+
+      const result = await client.allMembers();
+
+      expect(result).toEqual([
+        member(1, 1785274530000),
+        member(2, 1785274510000),
+        member(3, 1785274520000),
+      ]);
     });
   });
 

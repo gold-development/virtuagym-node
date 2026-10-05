@@ -79,11 +79,7 @@ export class VirtuaGymClientV1 {
   public async allEmployees(
     options: EmployeesOptions = {},
   ): Promise<Employee[]> {
-    const employees: Employee[] = [];
-    for await (const page of this.employees(options)) {
-      employees.push(...page);
-    }
-    return employees;
+    return collectByKey(this.employees(options), (e) => e.member_id);
   }
 
   /**
@@ -319,11 +315,7 @@ export class VirtuaGymClientV1 {
 
   /** Retrieves every member across all pages. */
   public async allMembers(options: MembersOptions = {}): Promise<Member[]> {
-    const members: Member[] = [];
-    for await (const page of this.members(options)) {
-      members.push(...page);
-    }
-    return members;
+    return collectByKey(this.members(options), (m) => m.member_id);
   }
 
   /**
@@ -1357,6 +1349,25 @@ export class VirtuaGymClientV1 {
 
     return z.object({ status: statusSchema, result: resultSchema }).parse(body);
   }
+}
+
+/**
+ * Flattens all pages into one list, collapsing rows that share a key: the
+ * first occurrence keeps its position, the latest copy wins. Needed for
+ * timestamp_edit cursors, where a row edited during the walk moves past the
+ * cursor and is returned again on a later page.
+ */
+async function collectByKey<T>(
+  pages: AsyncIterable<T[]>,
+  key: (item: T) => number | string,
+): Promise<T[]> {
+  const items = new Map<number | string, T>();
+  for await (const page of pages) {
+    for (const item of page) {
+      items.set(key(item), item);
+    }
+  }
+  return [...items.values()];
 }
 
 function isSuccessCode(statuscode: number): boolean {
